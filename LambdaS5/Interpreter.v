@@ -63,6 +63,7 @@ Definition eval_if (context : evaluation_context) (e_cond e_true e_false : expre
 (* e1 ; e2 *)
 Definition eval_seq (context : evaluation_context) (e1 e2 : expression) : (evaluation_context * result) :=
   if_value context e1 (fun context v => eval_cont_terminate context e2 )
+.
 
 
 (* Main evaluator *)
@@ -75,7 +76,7 @@ Definition eval (context : evaluation_context) (e : Syntax.expression) : (evalua
   | Syntax.True => return_value Values.True
   | Syntax.False => return_value Values.False
   | Syntax.If e_cond e_true e_false => eval_if context e_cond e_true e_false
-  | Syntax.Seq e1 e2 => eval_seq e1 e2
+  | Syntax.Seq e1 e2 => eval_seq context e1 e2
   | _ => (context, Fail "not implemented")
   end
 .
