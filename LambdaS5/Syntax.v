@@ -54,7 +54,7 @@ Inductive expression : Type :=
 | TryCatch : expression -> expression -> expression (* Catch block must be a lambda *)
 | TryFinally : expression -> expression -> expression
 | Throw : expression -> expression
-| Lambda : expression -> expression
+| Lambda : list id -> expression -> expression
 | Eval : expression -> expression -> expression (* string -> env_object -> expression *)
 with data : Type :=
 | Data : expression -> bool -> data (* expression -> writable -> data *)
