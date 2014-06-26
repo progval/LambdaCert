@@ -1,2 +1,12 @@
-*.ov
+# Coq
+*.v.d
+*.vo
+*.glob
+
+# Vim
+.*.swp
+.*.swo
 *~
+
+# Other stuff
+LambdaS5/Makefile

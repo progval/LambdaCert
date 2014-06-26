@@ -1,0 +1,3 @@
+BASE_PATH=`dirname $0`
+
+coq_makefile -I $BASE_PATH/../jscert/tlc/ -I $BASE_PATH/../jscert/coq/ *.v > Makefile
