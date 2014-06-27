@@ -47,9 +47,18 @@ Definition eval_cont_terminate (context : evaluation_context) (e : Syntax.expres
 
 (********* Monadic constructors ********)
 
+(* calls the continuation if the variable is a value. *)
+Definition if_value {value_type : Type} {value_type_2 : Type} (context : evaluation_context) (var : @result value_type) (cont : evaluation_context -> value_type -> (evaluation_context * (@result value_type_2))) : (evaluation_context * (@result value_type_2)) :=
+  match var with
+  | Value v => cont context v
+  | Exception exc => (context, Exception exc)
+  | Fail f => (context, Fail f)
+  end
+.
+
 (* Evaluates an expression in a context, and calls the continuation if
 * the evaluation returned a value. *)
-Definition if_value {value_type : Type} (context : evaluation_context) (e : Syntax.expression) (cont : evaluation_context -> Values.value -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
+Definition if_eval_value {value_type : Type} (context : evaluation_context) (e : Syntax.expression) (cont : evaluation_context -> Values.value -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
   eval_cont context e (fun context res => match res with
   | Value v => cont context v
   | Exception exc => (context, Exception exc)
@@ -61,18 +70,18 @@ Definition if_value {value_type : Type} (context : evaluation_context) (e : Synt
 (* Evaluates an expression with if it is Some, and calls the continuation
 * if the evaluation returned value. Calls the continuation of the default
 * value if the expression is None. *)
-Definition if_some_and_value (context : evaluation_context) (oe : option Syntax.expression) (default : Values.value) (cont : evaluation_context -> Values.value -> (evaluation_context * result)) : (evaluation_context * result) :=
+Definition if_some_and_eval_value (context : evaluation_context) (oe : option Syntax.expression) (default : Values.value) (cont : evaluation_context -> Values.value -> (evaluation_context * result)) : (evaluation_context * result) :=
   match oe with
-  | Some e => if_value context e cont
+  | Some e => if_eval_value context e cont
   | None => (context, Value default)
   end
 .
 
-(* Same as if_some_and_value, but returns an option as the result, and
+(* Same as if_some_and_eval_value, but returns an option as the result, and
 * None is used as the default. *)
-Definition if_some_and_value_option {value_type : Type} (context : evaluation_context) (oe : option Syntax.expression) (cont : evaluation_context -> option Values.value -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
+Definition if_some_and_eval_value_option {value_type : Type} (context : evaluation_context) (oe : option Syntax.expression) (cont : evaluation_context -> option Values.value -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
   match oe with
-  | Some e => if_value context e (fun ctx res => cont ctx (Some res))
+  | Some e => if_eval_value context e (fun ctx res => cont ctx (Some res))
   | None => cont context None
   end
 .
@@ -81,7 +90,7 @@ Definition if_some_and_value_option {value_type : Type} (context : evaluation_co
 
 (* if e_cond e_true else e_false *)
 Definition eval_if (context : evaluation_context) (e_cond e_true e_false : expression) : (evaluation_context * result) :=
-  if_value context e_cond (fun context v =>
+  if_eval_value context e_cond (fun context v =>
   match v with
   | Values.True => eval_cont_terminate context e_true
   | Values.False => eval_cont_terminate context e_false
@@ -92,7 +101,7 @@ Definition eval_if (context : evaluation_context) (e_cond e_true e_false : expre
 
 (* e1 ; e2 *)
 Definition eval_seq (context : evaluation_context) (e1 e2 : expression) : (evaluation_context * result) :=
-  if_value context e1 (fun context v => eval_cont_terminate context e2 )
+  if_eval_value context e1 (fun context v => eval_cont_terminate context e2 )
 .
 
 
@@ -101,7 +110,7 @@ Fixpoint eval_object_properties_aux (context : evaluation_context) (l : list (st
   | nil => (context, Value Heap.empty)
   | (name, Syntax.DataProperty (Syntax.Data value_expr writable) enumerable configurable) :: tail =>
     (* Note: we have to evaluate properties' expressions in the right order *)
-    if_value context value_expr (fun context value =>
+    if_eval_value context value_expr (fun context value =>
         eval_object_properties_aux context tail (Heap.write acc name (
           Values.attributes_data_of {|
               Values.attributes_data_value := value;
@@ -110,8 +119,8 @@ Fixpoint eval_object_properties_aux (context : evaluation_context) (l : list (st
               Values.attributes_data_configurable := configurable |}
         )))
   | (name, Syntax.AccessorProperty (Syntax.Accessor getter_expr setter_expr) enumerable configurable) :: tail =>
-    if_value context getter_expr (fun context getter =>
-      if_value context setter_expr (fun context setter =>
+    if_eval_value context getter_expr (fun context getter =>
+      if_eval_value context setter_expr (fun context setter =>
         eval_object_properties_aux context tail (Heap.write acc name (
            Values.attributes_accessor_of {|
               Values.attributes_accessor_get := getter;
@@ -133,25 +142,20 @@ Definition eval_object_decl (context : evaluation_context) (attrs : Syntax.objec
   match attrs with
   | Syntax.ObjectAttributes primval_expr code_expr prototype_expr class extensible =>
     (* Following the order in the original implementation: *)
-    if_some_and_value_option context primval_expr (fun context primval =>
-      if_some_and_value context prototype_expr Undefined (fun context prototype =>
-        if_some_and_value_option context code_expr (fun context code => 
-          match (eval_object_properties context l) with
-          | (context, Value props) =>
-              match (add_object_to_heap context {|
-                Values.object_proto := prototype;
-                Values.object_class := class;
-                Values.object_extensible := extensible;
-                Values.object_prim_value := primval;
-                Values.object_properties_ := props;
-                Values.object_code := code_expr |}) with
-              | (context, Value loc) => (context, Value (Values.ObjectLoc loc))
-              | (context, Exception exc) => (context, Exception exc)
-              | (context, Fail f) => (context, Fail f)
-              end
-          | (context, Exception exc) => (context, Exception exc)
-          | (context, Fail f) => (context, Fail f)
-          end)))
+    if_some_and_eval_value_option context primval_expr (fun context primval =>
+      if_some_and_eval_value context prototype_expr Undefined (fun context prototype =>
+        if_some_and_eval_value_option context code_expr (fun context code =>
+          let (context, props) := (eval_object_properties context l)
+          in if_value context props (fun context props =>
+              let (context, loc) := (add_object_to_heap context {|
+                  Values.object_proto := prototype;
+                  Values.object_class := class;
+                  Values.object_extensible := extensible;
+                  Values.object_prim_value := primval;
+                  Values.object_properties_ := props;
+                  Values.object_code := code_expr |})
+                in if_value context loc (fun context loc => (context, Value (Values.ObjectLoc loc)))
+          ))))
   end
 .
 
