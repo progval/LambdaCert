@@ -32,7 +32,7 @@ Inductive expression : Type :=
 | True
 | False
 | Id : id -> expression
-| ObjectDecl : object_attributes -> expression -> list property -> expression
+| ObjectDecl : object_attributes -> expression -> list (string * property) -> expression
 | GetAttr : property_attribute_name -> expression -> expression -> expression (* property -> object -> field_name -> expression *)
 | SetAttr : property_attribute_name -> expression -> expression -> expression -> expression (* property -> object -> field_name -> new_value -> expression *)
 | GetObjAttr : object_attribute_name -> expression -> expression
@@ -64,7 +64,7 @@ with property : Type :=
 | DataProperty : data -> bool -> bool -> property (* value -> enumerable -> configurable *)
 | AccessorProperty : accessor -> bool -> bool -> property
 with object_attributes : Type :=
-| ObjectAttributes: expression -> expression -> expression -> string -> bool -> object_attributes (* primval -> code -> prototype -> class -> extensible -> object_attributes *)
+| ObjectAttributes: option expression -> option expression -> option expression -> string -> bool -> object_attributes (* primval -> code -> prototype -> class -> extensible -> object_attributes *)
 .
 
 
