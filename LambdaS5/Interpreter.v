@@ -15,24 +15,35 @@ Inductive result {value_type : Type} : Type :=
 
 (* The interpreter environment (“context”) used to evaluate an expression *)
 Inductive evaluation_context : Type :=
-  | BottomEvaluationContext
+  (* We put the store here to make functions using the following ones easier to read and to write. *)
+  | BottomEvaluationContext : Values.store -> evaluation_context
   (* EvaluationContext (runs max_steps) store *)
   | EvaluationContext : (Values.store -> Syntax.expression -> (evaluation_context * (@result Values.value))) -> Values.store -> evaluation_context
 .
 
-Definition add_object_to_heap (context : evaluation_context) (object : Values.object) : (evaluation_context * (@result Values.object_loc)) :=
+Definition add_object_to_loc (context : evaluation_context) (object : Values.object) : (evaluation_context * (@result Values.object_loc)) :=
   match context with
-  | BottomEvaluationContext => (BottomEvaluationContext, Fail "bottom")
+  | BottomEvaluationContext store => 
+      let (new_store, loc) := Values.add_object_to_store store object in
+      (BottomEvaluationContext new_store, Value loc)
   | EvaluationContext runs store =>
       let (new_store, loc) := Values.add_object_to_store store object in
       (EvaluationContext runs new_store, Value loc)
+  end
+.
+Definition get_object_from_loc (context : evaluation_context) (loc : Values.object_loc) : option Values.object :=
+  match context with
+  | BottomEvaluationContext store =>
+      Values.get_object_from_store store loc
+  | EvaluationContext runs store =>
+      Values.get_object_from_store store loc
   end
 .
 
 (* Evaluate an expression in a context, and calls the continuation *)
 Definition eval_cont {value_type : Type} (context : evaluation_context) (e : Syntax.expression) (cont : evaluation_context -> (@result Values.value) -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
   match context with
-  | BottomEvaluationContext => (BottomEvaluationContext, Fail "bottom")
+  | BottomEvaluationContext store => (BottomEvaluationContext store, Fail "bottom")
   | EvaluationContext runs store =>
     match (runs store e) with (context, result) =>
       cont context result
@@ -85,6 +96,33 @@ Definition if_some_and_eval_value_option {value_type : Type} (context : evaluati
   | None => cont context None
   end
 .
+
+(* Calls the continuation if the value is an object location *)
+Definition if_objloc {value_type : Type} (context : evaluation_context) (v : Values.value) (cont : evaluation_context -> Values.object_loc -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
+  match v with
+  | Values.ObjectLoc loc => cont context loc
+  | _ => (context, Fail "Expected ObjectLoc but did not get one.")
+  end
+.
+
+(* Calls the continuation if the value is an object location, and passes it the object *)
+Definition if_get_object {value_type : Type} (context : evaluation_context) (v : Values.value) (cont : evaluation_context -> Values.object -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
+  if_objloc context v (fun context loc =>
+    match (get_object_from_loc context loc) with
+    | Some obj => cont context obj
+    | None => (context, Fail "reference to non-existing object")
+    end
+  )
+.
+
+(* Calls the continuation if the value is an object location *)
+Definition if_string {value_type : Type} (context : evaluation_context) (v : Values.value) (cont : evaluation_context -> string -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
+  match v with
+  | Values.String s => cont context s
+  | _ => (context, Fail "Expected String but did not get one.")
+  end
+.
+
 
 (********* Evaluators ********)
 
@@ -147,7 +185,7 @@ Definition eval_object_decl (context : evaluation_context) (attrs : Syntax.objec
         if_some_and_eval_value_option context code_expr (fun context code =>
           let (context, props) := (eval_object_properties context l)
           in if_value context props (fun context props =>
-              let (context, loc) := (add_object_to_heap context {|
+              let (context, loc) := (add_object_to_loc context {|
                   Values.object_proto := prototype;
                   Values.object_class := class;
                   Values.object_extensible := extensible;
@@ -159,6 +197,23 @@ Definition eval_object_decl (context : evaluation_context) (attrs : Syntax.objec
   end
 .
 
+(* left[right, attrs] *)
+Definition eval_get_field (context : evaluation_context) (left_expr right_expr attrs_expr : expression) : (evaluation_context * result) :=
+  if_eval_value context left_expr (fun context left =>
+    if_eval_value context right_expr (fun context right =>
+      if_eval_value context attrs_expr (fun context attrs =>
+        if_get_object context left (fun context object =>
+          if_string context right (fun context name =>
+            match (Values.get_object_property object name) with
+            | Some (attributes_data_of data) => (context, Value (Values.attributes_data_value data))
+            | Some (attributes_accessor_of accessor) => (context, Value (Values.attributes_accessor_get accessor))
+            | None => (context, Value Values.Undefined)
+            end)))))
+.
+        
+        
+
+(* left[right, attrs] = new_val *)
 
 (* Main evaluator *)
 Definition eval (context : evaluation_context) (e : Syntax.expression) : (evaluation_context * result) :=
@@ -172,6 +227,8 @@ Definition eval (context : evaluation_context) (e : Syntax.expression) : (evalua
   | Syntax.If e_cond e_true e_false => eval_if context e_cond e_true e_false
   | Syntax.Seq e1 e2 => eval_seq context e1 e2
   | Syntax.ObjectDecl attrs e l => eval_object_decl context attrs e l
+  | Syntax.GetField left_ right_ attributes => eval_get_field context left_ right_ attributes
+  (*| Syntax.SetField left_ right_ new_val attributes => eval_set_field context left_ right_ new_val attributes*)
   | _ => (context, Fail "not implemented")
   end
 .
@@ -179,7 +236,7 @@ Definition eval (context : evaluation_context) (e : Syntax.expression) : (evalua
 (* Evaluates expression and ensure there is a decreasing argument. *)
 Fixpoint runs (max_steps : nat) (store : Values.store) (e : Syntax.expression) : (evaluation_context * result) :=
   match (max_steps) with
-  | 0 => (BottomEvaluationContext, Fail "Coq is not Turing-complete")
+  | 0 => (BottomEvaluationContext store, Fail "Coq is not Turing-complete")
   | S max_steps' => eval (EvaluationContext (runs max_steps')  store) e
   end
 .

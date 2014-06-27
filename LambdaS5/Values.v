@@ -61,6 +61,10 @@ Record object := object_intro {
    object_properties_ : object_properties;
    object_code : option Syntax.expression }.
 
+Definition get_object_property (object : object) (name : prop_name) : option attributes :=
+  Heap.read_option (object_properties_ object) name
+.
+
 (****** Store ******)
 
 Record store := store_intro {
@@ -84,4 +88,8 @@ Definition add_object_to_store (st : store) (object : Values.object) : (store * 
   match st with
   | store_intro heap (loc ::: stream) => (store_intro (Heap.write heap loc object) stream, loc)
   end
+.
+
+Definition get_object_from_store (st : store) (loc : object_loc) : option object :=
+  Heap.read_option (object_heap st) loc
 .
