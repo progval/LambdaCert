@@ -3,6 +3,12 @@
 *.vo
 *.glob
 
+# Extraction
+LambdaS5/*.ml
+LambdaS5/*.mli
+*.byte
+_build/
+
 # Vim
 .*.swp
 .*.swo
