@@ -1,5 +1,5 @@
 Require Import List.
-Require Import String.
+Require Import Coq.Strings.String.
 Require Import Syntax.
 Require Import Values.
 Require Import LibHeap.
@@ -127,7 +127,7 @@ Definition if_string {value_type : Type} (context : evaluation_context) (v : Val
 (********* Evaluators ********)
 
 (* if e_cond e_true else e_false *)
-Definition eval_if (context : evaluation_context) (e_cond e_true e_false : expression) : (evaluation_context * result) :=
+Definition eval_if (context : evaluation_context) (e_cond e_true e_false : Syntax.expression) : (evaluation_context * result) :=
   if_eval_value context e_cond (fun context v =>
   match v with
   | Values.True => eval_cont_terminate context e_true
@@ -138,7 +138,7 @@ Definition eval_if (context : evaluation_context) (e_cond e_true e_false : expre
 .
 
 (* e1 ; e2 *)
-Definition eval_seq (context : evaluation_context) (e1 e2 : expression) : (evaluation_context * result) :=
+Definition eval_seq (context : evaluation_context) (e1 e2 : Syntax.expression) : (evaluation_context * result) :=
   if_eval_value context e1 (fun context v => eval_cont_terminate context e2 )
 .
 
@@ -175,7 +175,7 @@ Definition eval_object_properties (context : evaluation_context) (l : list (stri
 .
 
 (* { [ attrs ] props } *)
-Definition eval_object_decl (context : evaluation_context) (attrs : Syntax.object_attributes) (e : expression) (l : list (string * Syntax.property)) : (evaluation_context * result) :=
+Definition eval_object_decl (context : evaluation_context) (attrs : Syntax.object_attributes) (l : list (string * Syntax.property)) : (evaluation_context * result) :=
 
   match attrs with
   | Syntax.ObjectAttributes primval_expr code_expr prototype_expr class extensible =>
@@ -198,7 +198,7 @@ Definition eval_object_decl (context : evaluation_context) (attrs : Syntax.objec
 .
 
 (* left[right, attrs] *)
-Definition eval_get_field (context : evaluation_context) (left_expr right_expr attrs_expr : expression) : (evaluation_context * result) :=
+Definition eval_get_field (context : evaluation_context) (left_expr right_expr attrs_expr : Syntax.expression) : (evaluation_context * result) :=
   if_eval_value context left_expr (fun context left =>
     if_eval_value context right_expr (fun context right =>
       if_eval_value context attrs_expr (fun context attrs =>
@@ -226,7 +226,7 @@ Definition eval (context : evaluation_context) (e : Syntax.expression) : (evalua
   | Syntax.False => return_value Values.False
   | Syntax.If e_cond e_true e_false => eval_if context e_cond e_true e_false
   | Syntax.Seq e1 e2 => eval_seq context e1 e2
-  | Syntax.ObjectDecl attrs e l => eval_object_decl context attrs e l
+  | Syntax.ObjectDecl attrs l => eval_object_decl context attrs l
   | Syntax.GetField left_ right_ attributes => eval_get_field context left_ right_ attributes
   (*| Syntax.SetField left_ right_ new_val attributes => eval_set_field context left_ right_ new_val attributes*)
   | _ => (context, Fail "not implemented")
@@ -248,6 +248,4 @@ Definition runs_call (e : Syntax.expression) : result :=
   end
 .
 
-
-Eval vm_compute in (runs_call (Syntax.If Syntax.False (Syntax.String "true") (Syntax.String "false"))).
 
