@@ -2,12 +2,13 @@
 *.v.d
 *.vo
 *.glob
+LambdaS5/coq/Makefile
 
 # Extraction
 LambdaS5/coq/*.ml
 LambdaS5/coq/*.mli
 *.byte
-_build/
+build/
 
 # Vim
 .*.swp
