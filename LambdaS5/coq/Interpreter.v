@@ -79,18 +79,18 @@ Definition if_eval_value {value_type : Type} (context : evaluation_context) (e :
 .
 
 (* Evaluates an expression with if it is Some, and calls the continuation
-* if the evaluation returned value. Calls the continuation of the default
+* if the evaluation returned value. Calls the continuation with the default
 * value if the expression is None. *)
-Definition if_some_and_eval_value (context : evaluation_context) (oe : option Syntax.expression) (default : Values.value) (cont : evaluation_context -> Values.value -> (evaluation_context * result)) : (evaluation_context * result) :=
+Definition if_eval_value_default {value_type : Type} (context : evaluation_context) (oe : option Syntax.expression) (default : Values.value) (cont : evaluation_context -> Values.value -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
   match oe with
   | Some e => if_eval_value context e cont
-  | None => (context, Value default)
+  | None => cont context default 
   end
 .
 
 (* Same as if_some_and_eval_value, but returns an option as the result, and
 * None is used as the default. *)
-Definition if_some_and_eval_value_option {value_type : Type} (context : evaluation_context) (oe : option Syntax.expression) (cont : evaluation_context -> option Values.value -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
+Definition if_eval_value_option_default {value_type : Type} (context : evaluation_context) (oe : option Syntax.expression) (cont : evaluation_context -> option Values.value -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
   match oe with
   | Some e => if_eval_value context e (fun ctx res => cont ctx (Some res))
   | None => cont context None
@@ -180,9 +180,9 @@ Definition eval_object_decl (context : evaluation_context) (attrs : Syntax.objec
   match attrs with
   | Syntax.ObjectAttributes primval_expr code_expr prototype_expr class extensible =>
     (* Following the order in the original implementation: *)
-    if_some_and_eval_value_option context primval_expr (fun context primval =>
-      if_some_and_eval_value context prototype_expr Undefined (fun context prototype =>
-        if_some_and_eval_value_option context code_expr (fun context code =>
+    if_eval_value_option_default context primval_expr (fun context primval =>
+      if_eval_value_default context prototype_expr Undefined (fun context prototype =>
+        if_eval_value_option_default context code_expr (fun context code =>
           let (context, props) := (eval_object_properties context l)
           in if_value context props (fun context props =>
               let (context, loc) := (add_object_to_loc context {|
