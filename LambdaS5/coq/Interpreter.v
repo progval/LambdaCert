@@ -145,7 +145,7 @@ Definition eval_seq (context : evaluation_context) (e1 e2 : Syntax.expression) :
 
 Fixpoint eval_object_properties_aux (context : evaluation_context) (l : list (string * Syntax.property)) (acc : Values.object_properties) : (evaluation_context * (@result Values.object_properties)) :=
   match l with
-  | nil => (context, Value Heap.empty)
+  | nil => (context, Value acc)
   | (name, Syntax.DataProperty (Syntax.Data value_expr writable) enumerable configurable) :: tail =>
     (* Note: we have to evaluate properties' expressions in the right order *)
     if_eval_value context value_expr (fun context value =>
