@@ -224,6 +224,7 @@ Definition eval (context : evaluation_context) (e : Syntax.expression) : (evalua
   | Syntax.Number n => return_value (Values.Number n)
   | Syntax.True => return_value Values.True
   | Syntax.False => return_value Values.False
+  | Syntax.Id s => return_value (Values.String s)
   | Syntax.If e_cond e_true e_false => eval_if context e_cond e_true e_false
   | Syntax.Seq e1 e2 => eval_seq context e1 e2
   | Syntax.ObjectDecl attrs l => eval_object_decl context attrs l
