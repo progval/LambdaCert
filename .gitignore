@@ -4,8 +4,8 @@
 *.glob
 
 # Extraction
-LambdaS5/*.ml
-LambdaS5/*.mli
+LambdaS5/coq/*.ml
+LambdaS5/coq/*.mli
 *.byte
 _build/
 
@@ -13,6 +13,3 @@ _build/
 .*.swp
 .*.swo
 *~
-
-# Other stuff
-LambdaS5/Makefile
