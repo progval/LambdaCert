@@ -2,11 +2,6 @@
 
 open Syntax
 
-let explode s =
-  let rec exp i l =
-    if i < 0 then l else exp (i - 1) (s.[i] :: l) in
-      exp (String.length s - 1) []
-
 %}
 
 %token <int> INT
@@ -118,7 +113,7 @@ atom :
  | braced_seq_exp { $1 }
  | LPAREN unbraced_seq_exp RPAREN { $2 }
  | func { $1 }
- | TYPEOF atom { Op1 (explode "typeof", $2) }
+ | TYPEOF atom { Op1 (CoqUtils.explode "typeof", $2) }
      
 exp :
  | atom { $1 }
@@ -135,15 +130,15 @@ exp :
  | ID COLONEQ exp
    { SetBang ($1, $3) }
  | exp EQEQEQUALS exp
-     { Op2 (explode "stx=", $1, $3) }
+     { Op2 (CoqUtils.explode "stx=", $1, $3) }
  | exp BANGEQEQUALS exp
-     { If (Op2 (explode "stx=", $1, $3), False, True) }
+     { If (Op2 (CoqUtils.explode "stx=", $1, $3), False, True) }
  | exp LBRACK unbraced_seq_exp EQUALS unbraced_seq_exp RBRACK
-   { Let (explode "$newVal", $5,
+   { Let (CoqUtils.explode "$newVal", $5,
 	     SetField ($1, $3, 
-		       Id (explode "$newVal"), 
+		       Id (CoqUtils.explode "$newVal"), 
 		       ObjectDecl (default_object_attributes,
-            [(explode "0", DataProperty (Data (Id (explode "$newVal"), true),
+            [(CoqUtils.explode "0", DataProperty (Data (Id (CoqUtils.explode "$newVal"), true),
               true, true))])))
     }
  | exp LBRACK unbraced_seq_exp EQUALS unbraced_seq_exp COMMA unbraced_seq_exp RBRACK
@@ -165,7 +160,7 @@ exp :
      { SetObjAttr($4, $1, $7) }
  | exp AMPAMP exp { If ($1, $3, False) }
  | exp PIPEPIPE exp
-     { Let (explode "%or", $1, If (Id (explode "%or"), Id (explode "%or"), $3)) }
+     { Let (CoqUtils.explode "%or", $1, If (Id (CoqUtils.explode "%or"), Id (CoqUtils.explode "%or"), $3)) }
 
 
 cexp :

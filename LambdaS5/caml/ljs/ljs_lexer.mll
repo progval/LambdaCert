@@ -10,11 +10,6 @@ let comment_start_p = ref dummy_pos
 
 let block_comment_buf = Buffer.create 120
 
-let explode s =
-  let rec exp i l =
-    if i < 0 then l else exp (i - 1) (s.[i] :: l) in
-      exp (String.length s - 1) []
-
 (* TODO: if integer conversions overflow, treat as a float *)
 let parse_num_lit (s : string) : token =
   if S.contains s 'x' || S.contains s 'X'
@@ -72,8 +67,8 @@ rule token = parse
    | "/*:" { comment_start_p := lexeme_start_p lexbuf;
              hint lexbuf }
 
-   | '"' (double_quoted_string_char* as x) '"' { STRING (explode x) }
-   | ''' (single_quoted_string_char* as x) ''' { STRING (explode x) }
+   | '"' (double_quoted_string_char* as x) '"' { STRING (CoqUtils.explode x) }
+   | ''' (single_quoted_string_char* as x) ''' { STRING (CoqUtils.explode x) }
   
    | num_lit as x { parse_num_lit x }
    | "NaN" { NUM nan }
@@ -132,7 +127,7 @@ rule token = parse
    | "#class" { CLASS }
    | "get-own-field-names" { GETFIELDS }    
 
-   | ident as x { ID (explode x) }
+   | ident as x { ID (CoqUtils.explode x) }
  
    | eof { EOF }
 
@@ -144,7 +139,7 @@ and block_comment = parse
 
 and hint = parse
   | "*/" { let str = Buffer.contents block_comment_buf in
-             Buffer.clear block_comment_buf; HINT (explode str) }
+             Buffer.clear block_comment_buf; HINT (CoqUtils.explode str) }
   | '*' { Buffer.add_char block_comment_buf '*'; hint lexbuf }
   | "\r\n" { new_line lexbuf; Buffer.add_char block_comment_buf '\n'; 
              hint lexbuf }

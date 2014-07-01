@@ -14,4 +14,13 @@ let parse_es5 cin name =
 
 
 let _ =
-  Interpreter.runs 1000 Values.create_store (parse_es5 stdin "stdin")
+  let (context, result) = Interpreter.runs 1000 Values.create_store (parse_es5 stdin "stdin") in
+  match context with
+  | Interpreter.BottomEvaluationContext store -> print_string "Bottom."
+  | Interpreter.EvaluationContext (_, store) -> (
+    match result with
+    | Interpreter.Value v -> print_string (PrettyPrint.string_of_value store v)
+    | Interpreter.Exception e -> print_string "Uncaught exception: "; print_string (PrettyPrint.string_of_value store e)
+    | Interpreter.Fail f -> print_string "Fail: "; print_string (CoqUtils.implode f)
+  );
+  print_string "\n"
