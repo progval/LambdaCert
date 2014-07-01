@@ -1,6 +1,6 @@
 all: configure coq interpreter
 
-configure: coq/
+configure: coq/configure coq/*.v
 	cd coq;	./configure
 
 coq: configure

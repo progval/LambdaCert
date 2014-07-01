@@ -1,3 +1,7 @@
 BASE_PATH=`dirname $0`/..
 
-coq_makefile -I $BASE_PATH/../jscert/tlc/ -I $BASE_PATH/../jscert/coq/ *.v > Makefile
+TLC="-I $BASE_PATH/../jscert/tlc/"
+FLOCQ="-R $BASE_PATH/../jscert/flocq/src/ Flocq"
+JSCERT="-I $BASE_PATH/../jscert/coq/"
+
+coq_makefile $TLC $FLOCQ $JSCERT *.v > Makefile
