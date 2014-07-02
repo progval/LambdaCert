@@ -1,0 +1,1 @@
+let (foo = {[] 'bar': {#value "one", #writable true, #configurable true}}) foo['bar' = "two"]; foo

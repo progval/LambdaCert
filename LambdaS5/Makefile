@@ -28,9 +28,12 @@ caml: coq caml/ copy_ljs
 
 interpreter: caml
 
+tests:
+	tests/run_tests.py
+
 clean:
 	make -C coq/ clean
 	rm -f coq/*.ml{i,}
 	rm -rf build/*
 
-.PHONY: coq caml clean
+.PHONY: coq caml clean tests

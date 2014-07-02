@@ -1,0 +1,1 @@
+let (foo = {[] 'bar': {#value "foobar", #writable true, #configurable true}}) foo
