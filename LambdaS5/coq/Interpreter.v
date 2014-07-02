@@ -5,6 +5,7 @@ Require Import Values.
 Require Import LibHeap.
 Require Import LibStream.
 Open Scope list_scope.
+Open Scope string_scope.
 
 (* The result of the execution of a program *)
 Inductive result {value_type : Type} : Type :=
@@ -31,12 +32,19 @@ Definition add_object_to_loc (context : evaluation_context) (object : Values.obj
       (EvaluationContext runs new_store, Value loc)
   end
 .
-Definition get_object_from_loc (context : evaluation_context) (loc : Values.object_loc) : option Values.object :=
+Definition get_object_of_loc (context : evaluation_context) (loc : Values.object_loc) : option Values.object :=
   match context with
-  | BottomEvaluationContext store =>
+  | BottomEvaluationContext store
+  | EvaluationContext _ store =>
       Values.get_object_from_store store loc
-  | EvaluationContext runs store =>
-      Values.get_object_from_store store loc
+  end
+.
+
+Definition get_value_of_name (context : evaluation_context) (name : Values.id) : option Values.value :=
+  match context with
+  | BottomEvaluationContext store
+  | EvaluationContext _ store =>
+      Values.get_value_from_store store name
   end
 .
 
@@ -53,6 +61,40 @@ Definition eval_cont {value_type : Type} (context : evaluation_context) (e : Syn
 (* Alias for calling eval_cont with an empty continuation *)
 Definition eval_cont_terminate (context : evaluation_context) (e : Syntax.expression) : (evaluation_context * result) :=
   eval_cont context e (fun context result => (context, result))
+.
+
+Definition replace_store (context : evaluation_context) (st : store) : evaluation_context :=
+  match context with
+  | BottomEvaluationContext (Values.store_intro obj_heap val_heap stream) =>
+    BottomEvaluationContext st
+  | EvaluationContext runs (Values.store_intro obj_heap val_heap stream) =>
+    EvaluationContext runs st
+  end
+.
+
+Definition update_store (context : evaluation_context) (pred : Values.object_heap_type -> Values.value_heap_type -> (Values.object_heap_type * Values.value_heap_type)) : evaluation_context :=
+  let aux := (fun (x : Values.object_heap_type * Values.value_heap_type) stream =>
+    match x with (new_obj_heap, new_val_heap) =>
+      Values.store_intro new_obj_heap new_val_heap stream
+    end) in
+  match context with
+  | BottomEvaluationContext (Values.store_intro obj_heap val_heap stream) =>
+    BottomEvaluationContext (aux (pred obj_heap val_heap) stream)
+  | EvaluationContext runs (Values.store_intro obj_heap val_heap stream) =>
+    EvaluationContext runs (aux (pred obj_heap val_heap) stream)
+  end
+.
+
+
+Definition raise_exception (context : evaluation_context) (name : string) : (evaluation_context * (@result Values.value)) :=
+  match context with
+  | BottomEvaluationContext st
+  | EvaluationContext _ st =>
+    match (Values.add_object_to_store st (Values.object_intro Values.Undefined name true None Heap.empty None)) with
+    | (new_st, loc) =>
+      (replace_store context new_st, Exception (Values.ObjectLoc loc))
+    end
+  end
 .
 
 
@@ -106,10 +148,10 @@ Definition if_objloc {value_type : Type} (context : evaluation_context) (v : Val
 .
 
 (* Calls the continuation if the value is an object location, and passes it the object *)
-Definition if_get_object {value_type : Type} (context : evaluation_context) (v : Values.value) (cont : evaluation_context -> Values.object -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
+Definition if_get_object {value_type : Type} (context : evaluation_context) (v : Values.value) (cont : evaluation_context -> Values.object_loc -> Values.object -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
   if_objloc context v (fun context loc =>
-    match (get_object_from_loc context loc) with
-    | Some obj => cont context obj
+    match (get_object_of_loc context loc) with
+    | Some obj => cont context loc obj
     | None => (context, Fail "reference to non-existing object")
     end
   )
@@ -125,6 +167,15 @@ Definition if_string {value_type : Type} (context : evaluation_context) (v : Val
 
 
 (********* Evaluators ********)
+
+(* a lonely identifier *)
+Definition eval_id (context : evaluation_context) (name : string) : (evaluation_context * result) :=
+  match (get_value_of_name context name) with
+  | Some v => (context, Value v)
+  | None => raise_exception context "ReferenceError"
+  end
+.
+
 
 (* if e_cond e_true else e_false *)
 Definition eval_if (context : evaluation_context) (e_cond e_true e_false : Syntax.expression) : (evaluation_context * result) :=
@@ -202,18 +253,59 @@ Definition eval_get_field (context : evaluation_context) (left_expr right_expr a
   if_eval_value context left_expr (fun context left =>
     if_eval_value context right_expr (fun context right =>
       if_eval_value context attrs_expr (fun context attrs =>
-        if_get_object context left (fun context object =>
+        if_get_object context left (fun context loc object =>
           if_string context right (fun context name =>
             match (Values.get_object_property object name) with
             | Some (attributes_data_of data) => (context, Value (Values.attributes_data_value data))
-            | Some (attributes_accessor_of accessor) => (context, Value (Values.attributes_accessor_get accessor))
+            | Some (attributes_accessor_of accessor) => (BottomEvaluationContext Values.create_store, Fail "getter not implemented.")
             | None => (context, Value Values.Undefined)
             end)))))
 .
+
+Definition build_attrs (old_attrs : option Values.attributes) (new_val : Values.value) : Values.attributes :=
+  (* TODO: Test writable/configurable *)
+  match old_attrs with
+  | Some (Values.attributes_data_of (Values.attributes_data_intro v w e c)) =>
+    Values.attributes_data_of (Values.attributes_data_intro new_val w e c)
+  | None => Values.attributes_data_of (attributes_data_intro new_val true true true)
+  | _ => Values.attributes_data_of (Values.attributes_data_intro new_val true false true) (* TODO: Implement this *)
+  end
+.
         
-        
+Definition set_object_field_value (context : evaluation_context) (loc : Values.object_loc) (obj : Values.object) (name : string) (new_val : Values.value) : evaluation_context :=
+  update_store context (fun obj_heap val_heap =>
+    match obj with object_intro prot c e prim props code =>
+      let attrs := build_attrs (Heap.read_option props name) new_val in
+      let props2 := Heap.write props name attrs in
+      (Heap.write obj_heap loc (object_intro prot c e prim props2 code), val_heap)
+    end
+  )
+.
 
 (* left[right, attrs] = new_val *)
+Definition eval_set_field (context : evaluation_context) (left_expr right_expr new_val_expr attrs_expr : Syntax.expression) : (evaluation_context * result) :=
+  if_eval_value context left_expr (fun context left =>
+    if_eval_value context right_expr (fun context right =>
+      if_eval_value context new_val_expr (fun context new_val =>
+        if_get_object context left (fun context loc object =>
+          if_eval_value context attrs_expr (fun context attrs =>
+            if_string context right (fun context name =>
+              match (Values.get_object_property object name) with
+              | Some (attributes_data_of data) => (set_object_field_value context loc object name new_val, Value new_val)
+              | Some (attributes_accessor_of accessor) => (BottomEvaluationContext Values.create_store, Fail "setter not implemented.")
+              | None => (context, Value Values.Undefined)
+              end))))))
+.
+
+
+(* let id = value in body *)
+Definition eval_let (context : evaluation_context) (id : string) (value_expr body_expr : Syntax.expression) : (evaluation_context * result) :=
+  if_eval_value context value_expr (fun context value =>
+    let new_context := update_store context (fun obj_heap val_heap => 
+        (obj_heap, Heap.write val_heap id value))
+      in eval_cont_terminate new_context body_expr
+  )
+.
 
 (* Main evaluator *)
 Definition eval (context : evaluation_context) (e : Syntax.expression) : (evaluation_context * result) :=
@@ -224,12 +316,13 @@ Definition eval (context : evaluation_context) (e : Syntax.expression) : (evalua
   | Syntax.Number n => return_value (Values.Number n)
   | Syntax.True => return_value Values.True
   | Syntax.False => return_value Values.False
-  | Syntax.Id s => return_value (Values.String s)
+  | Syntax.Id s => eval_id context s
   | Syntax.If e_cond e_true e_false => eval_if context e_cond e_true e_false
   | Syntax.Seq e1 e2 => eval_seq context e1 e2
   | Syntax.ObjectDecl attrs l => eval_object_decl context attrs l
   | Syntax.GetField left_ right_ attributes => eval_get_field context left_ right_ attributes
-  (*| Syntax.SetField left_ right_ new_val attributes => eval_set_field context left_ right_ new_val attributes*)
+  | Syntax.SetField left_ right_ new_val attributes => eval_set_field context left_ right_ new_val attributes
+  | Syntax.Let id value body => eval_let context id value body
   | _ => (context, Fail "not implemented")
   end
 .

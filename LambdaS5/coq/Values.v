@@ -13,9 +13,8 @@ Require Import Syntax.
 
 (****** Basic stuff ******)
 
-Definition env_loc := nat.
+Definition id := string.
 Definition object_loc := nat.
-Definition lexical_env := list env_loc.
 
 Inductive value : Type :=
 | Null
@@ -67,9 +66,12 @@ Definition get_object_property (object : object) (name : prop_name) : option att
 
 (****** Store ******)
 
+Definition object_heap_type := Heap.heap object_loc object.
+Definition value_heap_type := Heap.heap id value.
+
 Record store := store_intro {
-   object_heap : Heap.heap object_loc object;
-   (*env_record_heap : Heap.heap env_loc env_record; *)
+   object_heap : object_heap_type;
+   value_heap : value_heap_type;
    fresh_locations : stream nat }.
 
 CoFixpoint all_locations (k:nat) : stream nat :=
@@ -78,18 +80,23 @@ Definition dummy_fresh_locations := all_locations 1%nat.
 
 Definition object_heap_initial : Heap.heap object_loc object:=
   Heap.empty.
+Definition value_heap_initial : Heap.heap id value:=
+  Heap.empty.
 
 Definition create_store :=
   {| object_heap := object_heap_initial;
-     (*env_record_heap := env_record_heap_initial;*)
+     value_heap := value_heap_initial;
      fresh_locations := dummy_fresh_locations |}.
 
 Definition add_object_to_store (st : store) (object : Values.object) : (store * object_loc) :=
   match st with
-  | store_intro heap (loc ::: stream) => (store_intro (Heap.write heap loc object) stream, loc)
+  | store_intro obj_heap val_heap (loc ::: stream) => (store_intro (Heap.write obj_heap loc object) (val_heap) stream, loc)
   end
 .
 
 Definition get_object_from_store (st : store) (loc : object_loc) : option object :=
   Heap.read_option (object_heap st) loc
+.
+Definition get_value_from_store (st : store) (name : id) : option value :=
+  Heap.read_option (value_heap st) name
 .
