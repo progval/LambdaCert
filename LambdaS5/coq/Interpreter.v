@@ -7,21 +7,57 @@ Require Import LibStream.
 Open Scope list_scope.
 Open Scope string_scope.
 
-(* The result of the execution of a program *)
+(* Basic idea of how this file works:
+* There are four sections in this file:
+* * The utilities, which are the result and context structures,
+*   and helper functions to manipulate the store embedded in the
+*   context structure.
+* * The monadic constructors, which mostly take a context, some
+*   data, and a continuation; performing a test on the data; and calling
+*   the continuation in one case, and doing something else in other cases
+*   (either calling the continuation with a default, or returning a default,
+*   or returning the data verbatim).
+* * The evaluators, which actually define the semantics of LambdaJS.
+*   There is one evaluator per node constructor (defined in coq/Syntax.v),
+*   with eventually helper functions.
+* * The “looping” functions, which call the evaluators. The “runs”
+*   function calls eval at every iteration, with a reference to itself
+*   applied to a strictly decreasing integer, to make Coq accept the
+*   code.
+*)
+
+
+
+(******* Utilities *******)
+
+(* Used for passing data through continuations/return values.
+* It is mostly used for returning a Javascript value, either as
+* Value or Exception, but sometimes we want to return another kind
+* of result, which is the reason why this type is parametered by
+* value_type. *)
 Inductive result {value_type : Type} : Type :=
   | Value : value_type -> result (* value *)
   | Exception : Values.value -> result (* exception message *)
   | Fail : string -> result (* reason *)
 .
 
-(* The interpreter environment (“context”) used to evaluate an expression *)
+(* The interpreter environment (“context”) used to evaluate an expression.
+* We mostly use EvaluationContext, which contains a reference to `runs`
+* (defined at the bottom of this file) applied to an integer (the strictly
+* decreasing argument, needed by Coq; and a store.
+* BottomEvaluationContext is used when the integer reached 0, and we have
+* to stop the execution (hopefully never actually happens).
+* We add a store to BottomEvaluationContext because it makes writing some
+* functions easier (no need for returning an option).
+*)
 Inductive evaluation_context : Type :=
-  (* We put the store here to make functions using the following ones easier to read and to write. *)
   | BottomEvaluationContext : Values.store -> evaluation_context
-  (* EvaluationContext (runs max_steps) store *)
   | EvaluationContext : (Values.store -> Syntax.expression -> (evaluation_context * (@result Values.value))) -> Values.store -> evaluation_context
 .
 
+(* Generates a new locations, assigns the object to this location in the
+* context's store, and returns the new context and this location.
+*)
 Definition add_object_to_loc (context : evaluation_context) (object : Values.object) : (evaluation_context * (@result Values.object_loc)) :=
   match context with
   | BottomEvaluationContext store => 
@@ -32,6 +68,9 @@ Definition add_object_to_loc (context : evaluation_context) (object : Values.obj
       (EvaluationContext runs new_store, Value loc)
   end
 .
+(* Fetches the object in the context's store that has this location, if any.
+* Note: Should never return None, unless the code calling this function is
+* inconsistent (asks for a location that does not exist…). *)
 Definition get_object_of_loc (context : evaluation_context) (loc : Values.object_loc) : option Values.object :=
   match context with
   | BottomEvaluationContext store
@@ -40,6 +79,8 @@ Definition get_object_of_loc (context : evaluation_context) (loc : Values.object
   end
 .
 
+(* Returns the value associated to a variable name (aka. id) in the current
+* context. *)
 Definition get_value_of_name (context : evaluation_context) (name : Values.id) : option Values.value :=
   match context with
   | BottomEvaluationContext store
@@ -48,7 +89,8 @@ Definition get_value_of_name (context : evaluation_context) (name : Values.id) :
   end
 .
 
-(* Evaluate an expression in a context, and calls the continuation *)
+(* Evaluate an expression in a context, and calls the continuation with
+* the new context and the result of the evaluation. *)
 Definition eval_cont {value_type : Type} (context : evaluation_context) (e : Syntax.expression) (cont : evaluation_context -> (@result Values.value) -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
   match context with
   | BottomEvaluationContext store => (BottomEvaluationContext store, Fail "bottom")
@@ -63,6 +105,8 @@ Definition eval_cont_terminate (context : evaluation_context) (e : Syntax.expres
   eval_cont context e (fun context result => (context, result))
 .
 
+(* Returns a new context, which is the old context where the store
+* has been replaced by a new one. *)
 Definition replace_store (context : evaluation_context) (st : store) : evaluation_context :=
   match context with
   | BottomEvaluationContext (Values.store_intro obj_heap val_heap stream) =>
@@ -72,11 +116,15 @@ Definition replace_store (context : evaluation_context) (st : store) : evaluatio
   end
 .
 
+(* Unpacks a context to get the store's heaps, applies the predicate to the
+* two heaps of the store, and returns a new context with a new store where
+* the new store's heaps are the heaps returned by the predicated. *)
 Definition update_store (context : evaluation_context) (pred : Values.object_heap_type -> Values.value_heap_type -> (Values.object_heap_type * Values.value_heap_type)) : evaluation_context :=
-  let aux := (fun (x : Values.object_heap_type * Values.value_heap_type) stream =>
+  let aux := (fun x stream =>
     match x with (new_obj_heap, new_val_heap) =>
       Values.store_intro new_obj_heap new_val_heap stream
-    end) in
+    end
+  ) in
   match context with
   | BottomEvaluationContext (Values.store_intro obj_heap val_heap stream) =>
     BottomEvaluationContext (aux (pred obj_heap val_heap) stream)
@@ -85,7 +133,7 @@ Definition update_store (context : evaluation_context) (pred : Values.object_hea
   end
 .
 
-
+(* Shortcut for instanciating and throwing an exception of the given name. *)
 Definition raise_exception (context : evaluation_context) (name : string) : (evaluation_context * (@result Values.value)) :=
   match context with
   | BottomEvaluationContext st
@@ -100,7 +148,8 @@ Definition raise_exception (context : evaluation_context) (name : string) : (eva
 
 (********* Monadic constructors ********)
 
-(* calls the continuation if the variable is a value. *)
+(* Calls the continuation if the variable is a value.
+* Returns the variable and the context verbatim otherwise. *)
 Definition if_value {value_type : Type} {value_type_2 : Type} (context : evaluation_context) (var : @result value_type) (cont : evaluation_context -> value_type -> (evaluation_context * (@result value_type_2))) : (evaluation_context * (@result value_type_2)) :=
   match var with
   | Value v => cont context v
@@ -110,7 +159,8 @@ Definition if_value {value_type : Type} {value_type_2 : Type} (context : evaluat
 .
 
 (* Evaluates an expression in a context, and calls the continuation if
-* the evaluation returned a value. *)
+* the evaluation returned a value.
+* Returns the context and the variable verbatim otherwise. *)
 Definition if_eval_value {value_type : Type} (context : evaluation_context) (e : Syntax.expression) (cont : evaluation_context -> Values.value -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
   eval_cont context e (fun context res => match res with
   | Value v => cont context v
@@ -123,7 +173,7 @@ Definition if_eval_value {value_type : Type} (context : evaluation_context) (e :
 (* Evaluates an expression with if it is Some, and calls the continuation
 * if the evaluation returned value. Calls the continuation with the default
 * value if the expression is None. *)
-Definition if_eval_value_default {value_type : Type} (context : evaluation_context) (oe : option Syntax.expression) (default : Values.value) (cont : evaluation_context -> Values.value -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
+Definition if_some_eval_else_default {value_type : Type} (context : evaluation_context) (oe : option Syntax.expression) (default : Values.value) (cont : evaluation_context -> Values.value -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
   match oe with
   | Some e => if_eval_value context e cont
   | None => cont context default 
@@ -131,7 +181,7 @@ Definition if_eval_value_default {value_type : Type} (context : evaluation_conte
 .
 
 (* Same as if_some_and_eval_value, but returns an option as the result, and
-* None is used as the default. *)
+* None is used as the default value passed to the continuation. *)
 Definition if_eval_value_option_default {value_type : Type} (context : evaluation_context) (oe : option Syntax.expression) (cont : evaluation_context -> option Values.value -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
   match oe with
   | Some e => if_eval_value context e (fun ctx res => cont ctx (Some res))
@@ -139,17 +189,19 @@ Definition if_eval_value_option_default {value_type : Type} (context : evaluatio
   end
 .
 
-(* Calls the continuation if the value is an object location *)
-Definition if_objloc {value_type : Type} (context : evaluation_context) (v : Values.value) (cont : evaluation_context -> Values.object_loc -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
+(* Calls the continuation if the value is an object location.
+* Fails otherwise. *)
+Definition assert_objloc {value_type : Type} (context : evaluation_context) (v : Values.value) (cont : evaluation_context -> Values.object_loc -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
   match v with
   | Values.ObjectLoc loc => cont context loc
   | _ => (context, Fail "Expected ObjectLoc but did not get one.")
   end
 .
 
-(* Calls the continuation if the value is an object location, and passes it the object *)
-Definition if_get_object {value_type : Type} (context : evaluation_context) (v : Values.value) (cont : evaluation_context -> Values.object_loc -> Values.object -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
-  if_objloc context v (fun context loc =>
+(* Calls the continuation if the value is an object location, and passes it the object.
+* Fails otherwise. *)
+Definition assert_get_object {value_type : Type} (context : evaluation_context) (v : Values.value) (cont : evaluation_context -> Values.object_loc -> Values.object -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
+  assert_objloc context v (fun context loc =>
     match (get_object_of_loc context loc) with
     | Some obj => cont context loc obj
     | None => (context, Fail "reference to non-existing object")
@@ -157,8 +209,9 @@ Definition if_get_object {value_type : Type} (context : evaluation_context) (v :
   )
 .
 
-(* Calls the continuation if the value is an object location *)
-Definition if_string {value_type : Type} (context : evaluation_context) (v : Values.value) (cont : evaluation_context -> string -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
+(* Calls the continuation if the value is a string.
+* Fails otherwise. *)
+Definition assert_string {value_type : Type} (context : evaluation_context) (v : Values.value) (cont : evaluation_context -> string -> (evaluation_context * (@result value_type))) : (evaluation_context * (@result value_type)) :=
   match v with
   | Values.String s => cont context s
   | _ => (context, Fail "Expected String but did not get one.")
@@ -194,11 +247,13 @@ Definition eval_seq (context : evaluation_context) (e1 e2 : Syntax.expression) :
 .
 
 
+(* A tail-recursive helper for eval_object_properties, that constructs
+* the list of properties. *)
 Fixpoint eval_object_properties_aux (context : evaluation_context) (l : list (string * Syntax.property)) (acc : Values.object_properties) : (evaluation_context * (@result Values.object_properties)) :=
   match l with
   | nil => (context, Value acc)
   | (name, Syntax.DataProperty (Syntax.Data value_expr writable) enumerable configurable) :: tail =>
-    (* Note: we have to evaluate properties' expressions in the right order *)
+    (* The order of the evaluation follows the original implementation. *)
     if_eval_value context value_expr (fun context value =>
         eval_object_properties_aux context tail (Heap.write acc name (
           Values.attributes_data_of {|
@@ -208,6 +263,7 @@ Fixpoint eval_object_properties_aux (context : evaluation_context) (l : list (st
               Values.attributes_data_configurable := configurable |}
         )))
   | (name, Syntax.AccessorProperty (Syntax.Accessor getter_expr setter_expr) enumerable configurable) :: tail =>
+    (* The order of the evaluation follows the original implementation. *)
     if_eval_value context getter_expr (fun context getter =>
       if_eval_value context setter_expr (fun context setter =>
         eval_object_properties_aux context tail (Heap.write acc name (
@@ -219,7 +275,7 @@ Fixpoint eval_object_properties_aux (context : evaluation_context) (l : list (st
     ))))
   end
 .
-(* Reads a syntax tree of properties and converts it to a heap
+(* Reads a list of syntax trees of properties and converts it to a heap
 * bindable to an object. *)
 Definition eval_object_properties (context : evaluation_context) (l : list (string * Syntax.property)) : (evaluation_context * (@result Values.object_properties)) :=
   eval_object_properties_aux context l Heap.empty
@@ -232,7 +288,7 @@ Definition eval_object_decl (context : evaluation_context) (attrs : Syntax.objec
   | Syntax.ObjectAttributes primval_expr code_expr prototype_expr class extensible =>
     (* Following the order in the original implementation: *)
     if_eval_value_option_default context primval_expr (fun context primval =>
-      if_eval_value_default context prototype_expr Undefined (fun context prototype =>
+      if_some_eval_else_default context prototype_expr Undefined (fun context prototype =>
         if_eval_value_option_default context code_expr (fun context code =>
           let (context, props) := (eval_object_properties context l)
           in if_value context props (fun context props =>
@@ -253,8 +309,8 @@ Definition eval_get_field (context : evaluation_context) (left_expr right_expr a
   if_eval_value context left_expr (fun context left =>
     if_eval_value context right_expr (fun context right =>
       if_eval_value context attrs_expr (fun context attrs =>
-        if_get_object context left (fun context loc object =>
-          if_string context right (fun context name =>
+        assert_get_object context left (fun context loc object =>
+          assert_string context right (fun context name =>
             match (Values.get_object_property object name) with
             | Some (attributes_data_of data) => (context, Value (Values.attributes_data_value data))
             | Some (attributes_accessor_of accessor) => (BottomEvaluationContext Values.create_store, Fail "getter not implemented.")
@@ -262,6 +318,9 @@ Definition eval_get_field (context : evaluation_context) (left_expr right_expr a
             end)))))
 .
 
+(* If Some Data attributes are given, returns them with the #value replaced.
+* TODO: If Some Accessor, should fail.
+* If None, returns None. *)
 Definition build_attrs (old_attrs : option Values.attributes) (new_val : Values.value) : Values.attributes :=
   (* TODO: Test writable/configurable *)
   match old_attrs with
@@ -271,7 +330,10 @@ Definition build_attrs (old_attrs : option Values.attributes) (new_val : Values.
   | _ => Values.attributes_data_of (Values.attributes_data_intro new_val true false true) (* TODO: Implement this *)
   end
 .
-        
+
+(* Takes an object (which has to be the object pointed by loc in the context),
+* replaces one of its properties (designated by its name) by the new value,
+* and returns the new context. *)
 Definition set_object_field_value (context : evaluation_context) (loc : Values.object_loc) (obj : Values.object) (name : string) (new_val : Values.value) : evaluation_context :=
   update_store context (fun obj_heap val_heap =>
     match obj with object_intro prot c e prim props code =>
@@ -287,9 +349,9 @@ Definition eval_set_field (context : evaluation_context) (left_expr right_expr n
   if_eval_value context left_expr (fun context left =>
     if_eval_value context right_expr (fun context right =>
       if_eval_value context new_val_expr (fun context new_val =>
-        if_get_object context left (fun context loc object =>
+        assert_get_object context left (fun context loc object =>
           if_eval_value context attrs_expr (fun context attrs =>
-            if_string context right (fun context name =>
+            assert_string context right (fun context name =>
               match (Values.get_object_property object name) with
               | Some (attributes_data_of data) => (set_object_field_value context loc object name new_val, Value new_val)
               | Some (attributes_accessor_of accessor) => (BottomEvaluationContext Values.create_store, Fail "setter not implemented.")
@@ -306,6 +368,9 @@ Definition eval_let (context : evaluation_context) (id : string) (value_expr bod
       in eval_cont_terminate new_context body_expr
   )
 .
+
+
+(******** Closing the loop *******)
 
 (* Main evaluator *)
 Definition eval (context : evaluation_context) (e : Syntax.expression) : (evaluation_context * result) :=

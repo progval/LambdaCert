@@ -2,6 +2,13 @@ Require Import List.
 Require Import Coq.Strings.String.
 Require Import Fappli_IEEE Fappli_IEEE_bits.
 
+
+(* Data structures, created by the parser (in caml/ljs/ljs_parser.mly *)
+
+(* This is mostly a Coq translation of the data structures defined in the
+* original LambdaJS interpreter. *)
+
+
 Definition id : Type := string.
 
 Definition number : Type := Fappli_IEEE_bits.binary64.

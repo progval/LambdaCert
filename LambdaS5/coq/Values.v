@@ -11,6 +11,17 @@ Module Heap := HeapGen (LibHeap.HeapList).
 
 Require Import Syntax.
 
+
+(* LambdaJS values, and object/values storage. *)
+
+(* Values are not to be confused with objects.
+* Values are all of basic data types (either a constant constructor
+* or a string/integer). They can be a location to an object (you can
+* think of locations as references).
+* An object is a collection of data with lots of metadata.
+*)
+
+
 (****** Basic stuff ******)
 
 Definition id := string.
@@ -27,6 +38,8 @@ Inductive value : Type :=
 .
 
 (****** Objects ******)
+
+(* (The code in this section comes mostly from JSCert.) *)
 
 (* Named data property attributes *)
 Record attributes_data := attributes_data_intro {
@@ -65,6 +78,8 @@ Definition get_object_property (object : object) (name : prop_name) : option att
 .
 
 (****** Store ******)
+
+(* (The initial definitions of the sections come from JSCert.) *)
 
 Definition object_heap_type := Heap.heap object_loc object.
 Definition value_heap_type := Heap.heap id value.
