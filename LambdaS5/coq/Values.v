@@ -108,6 +108,11 @@ Definition add_object_to_store (st : store) (object : Values.object) : (store * 
   | store_intro obj_heap val_heap (loc ::: stream) => (store_intro (Heap.write obj_heap loc object) (val_heap) stream, loc)
   end
 .
+Definition add_value_to_store (st : store) (name : id) (val : Values.value) : store :=
+  match st with
+  | store_intro obj_heap val_heap stream => store_intro obj_heap (Heap.write val_heap name val) stream
+  end
+.
 
 Definition get_object_from_store (st : store) (loc : object_loc) : option object :=
   Heap.read_option (object_heap st) loc

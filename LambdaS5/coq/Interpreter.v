@@ -27,6 +27,9 @@ Open Scope string_scope.
 *)
 
 
+(* TODO: Remove all usages of LibHeap from this file and use an abstraction
+* in coq/Values.v instead. *)
+
 
 (******* Utilities *******)
 
@@ -106,13 +109,13 @@ Definition eval_cont_terminate (context : evaluation_context) (e : Syntax.expres
 .
 
 (* Returns a new context, which is the old context where the store
-* has been replaced by a new one. *)
-Definition replace_store (context : evaluation_context) (st : store) : evaluation_context :=
+* has been replaced by a new one using the predicate. *)
+Definition replace_store {return_value : Type} (context : evaluation_context) (pred : store -> (store * return_value)) : (evaluation_context * return_value) :=
   match context with
-  | BottomEvaluationContext (Values.store_intro obj_heap val_heap stream) =>
-    BottomEvaluationContext st
-  | EvaluationContext runs (Values.store_intro obj_heap val_heap stream) =>
-    EvaluationContext runs st
+  | BottomEvaluationContext st =>
+    let (new_st, ret) := (pred st) in (BottomEvaluationContext new_st, ret)
+  | EvaluationContext runs st =>
+    let (new_st, ret) := (pred st) in (EvaluationContext runs new_st, ret)
   end
 .
 
@@ -135,14 +138,11 @@ Definition update_store (context : evaluation_context) (pred : Values.object_hea
 
 (* Shortcut for instanciating and throwing an exception of the given name. *)
 Definition raise_exception (context : evaluation_context) (name : string) : (evaluation_context * (@result Values.value)) :=
-  match context with
-  | BottomEvaluationContext st
-  | EvaluationContext _ st =>
+  replace_store context (fun st =>
     match (Values.add_object_to_store st (Values.object_intro Values.Undefined name true None Heap.empty None)) with
-    | (new_st, loc) =>
-      (replace_store context new_st, Exception (Values.ObjectLoc loc))
+    | (new_st, loc) => (new_st, Exception (Values.ObjectLoc loc))
     end
-  end
+  )
 .
 
 
@@ -360,7 +360,7 @@ Definition eval_set_field (context : evaluation_context) (left_expr right_expr n
 .
 
 
-(* let id = value in body *)
+(* let (id = expr) body *)
 Definition eval_let (context : evaluation_context) (id : string) (value_expr body_expr : Syntax.expression) : (evaluation_context * result) :=
   if_eval_value context value_expr (fun context value =>
     let new_context := update_store context (fun obj_heap val_heap => 
@@ -368,6 +368,7 @@ Definition eval_let (context : evaluation_context) (id : string) (value_expr bod
       in eval_cont_terminate new_context body_expr
   )
 .
+
 
 
 (******** Closing the loop *******)
