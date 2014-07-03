@@ -274,6 +274,12 @@ Definition eval_setbang context (name : string) (expr : Syntax.expression) : (Co
   ))
 .
 
+(* func (args) { body } *)
+Definition eval_lambda context (args : list id) (body : Syntax.expression) : (Context.context * Context.result) :=
+  let env := Context.read_store context Values.loc_heap in
+  Context.add_value_return context (Values.Closure env args body)
+.
+
 
 (******** Closing the loop *******)
 
@@ -294,6 +300,7 @@ Definition eval context (e : Syntax.expression) : (Context.context * (@Context.r
   | Syntax.SetField left_ right_ new_val attributes => eval_set_field context left_ right_ new_val attributes
   | Syntax.Let id value body => eval_let context id value body
   | Syntax.SetBang id expr => eval_setbang context id expr
+  | Syntax.Lambda args body => eval_lambda context args body
   | _ => (context, Fail "not implemented")
   end
 .

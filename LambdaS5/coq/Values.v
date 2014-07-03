@@ -88,6 +88,7 @@ Inductive value : Type :=
 | True
 | False
 | Object : object_ptr -> value
+| Closure : loc_heap_type -> list id -> Syntax.expression -> value
 .
 
 (****** Store ******)

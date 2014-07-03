@@ -10,6 +10,10 @@ and string_of_value st = function
 | Values.True -> "true"
 | Values.False -> "false"
 | Values.Object ptr -> string_of_object_ptr st ptr
+| Values.Closure (loc_heap, args, body) ->
+    Printf.sprintf "<closure func (%s) { %s }>"
+      (String.concat ", " (List.map CoqUtils.implode args))
+      (string_of_expression body)
 and string_of_value_loc_option st = function
 | Some v -> string_of_value_loc st v
 | None -> "<unset val>"
