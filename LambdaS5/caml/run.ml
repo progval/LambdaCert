@@ -19,8 +19,8 @@ let _ =
   | Interpreter.BottomEvaluationContext store -> print_string "Bottom."
   | Interpreter.EvaluationContext (_, store) -> (
     match result with
-    | Interpreter.Value v -> print_string (PrettyPrint.string_of_value store v)
-    | Interpreter.Exception e -> print_string "Uncaught exception: "; print_string (PrettyPrint.string_of_value store e)
+    | Interpreter.Success v -> print_string (PrettyPrint.string_of_value_loc store v)
+    | Interpreter.Exception e -> print_string "Uncaught exception: "; print_string (PrettyPrint.string_of_value_loc store e)
     | Interpreter.Fail f -> print_string "Fail: "; print_string (CoqUtils.implode f)
   );
   print_string "\n"
