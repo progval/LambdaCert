@@ -16,11 +16,11 @@ let parse_es5 cin name =
 let _ =
   let (context, result) = Interpreter.runs 1000 Values.create_store (parse_es5 stdin "stdin") in
   match context with
-  | Interpreter.BottomEvaluationContext store -> print_string "Bottom."
-  | Interpreter.EvaluationContext (_, store) -> (
+  | Context.BottomEvaluationContext store -> print_string "Bottom."
+  | Context.EvaluationContext (_, store) -> (
     match result with
-    | Interpreter.Success v -> print_string (PrettyPrint.string_of_value_loc store v)
-    | Interpreter.Exception e -> print_string "Uncaught exception: "; print_string (PrettyPrint.string_of_value_loc store e)
-    | Interpreter.Fail f -> print_string "Fail: "; print_string (CoqUtils.implode f)
+    | Context.Return v -> print_string (PrettyPrint.string_of_value_loc store v)
+    | Context.Exception e -> print_string "Uncaught exception: "; print_string (PrettyPrint.string_of_value_loc store e)
+    | Context.Fail f -> print_string "Fail: "; print_string (CoqUtils.implode f)
   );
   print_string "\n"
