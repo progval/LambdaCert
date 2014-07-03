@@ -100,14 +100,24 @@ Definition assert_deref {value_type : Type} context (loc : Values.value_loc) (co
 .
 
 
-(* Calls the continuation if the value is an object location, and passes the object to the continuation.
+(* Calls the continuation if the value is an object pointer, and passes the pointer to the continuation.
 * Fails otherwise. *)
-Definition assert_get_object {value_type : Type} context (loc : Values.value_loc) (cont : Context.context -> Values.object -> (Context.context * (@Context.result value_type))) : (Context.context * (@Context.result value_type)) :=
-  match (get_value_of_loc context loc) with
-  | Some (Object obj) => cont context obj
-  | Some _ => (context, Fail "Expected an object.")
+Definition assert_get_object_ptr {value_type : Type} context (loc : Values.value_loc) (cont : Context.context -> Values.object_ptr -> (Context.context * (@Context.result value_type))) : (Context.context * (@Context.result value_type)) :=
+  match (Context.get_value_of_loc context loc) with
+  | Some (Values.Object ptr) => cont context ptr
+  | Some _ => (context, Fail "Expected an object pointer.")
   | None => (context, Fail "Location of non-existing value.")
   end
+.
+
+(* Calls the continuation if the value is an object pointer, and passes the object to the continuation *)
+Definition assert_get_object {value_type : Type} context (loc : Values.value_loc) (cont : Context.context -> Values.object -> (Context.context * (@Context.result value_type))) : (Context.context * (@Context.result value_type)) :=
+  assert_get_object_ptr context loc (fun context ptr =>
+    match (Context.get_object_of_ptr context ptr) with
+    | Some obj => cont context obj
+    | None => (context, Fail "Pointer to a non-existing object.")
+    end
+  )
 .
 
 (* Calls the continuation if the value is a string.
@@ -196,13 +206,13 @@ Definition eval_object_decl context (attrs : Syntax.object_attributes) (l : list
         if_some_eval_return_else_none context code_expr (fun context code =>
           let (context, props) := (eval_object_properties context l)
           in if_return context props (fun context props =>
-            Context.add_value_return context (Values.Object {|
+            Context.add_object_return context {|
                 Values.object_proto := prototype_loc;
                 Values.object_class := class;
                 Values.object_extensible := extensible;
                 Values.object_prim_value := primval_loc;
                 Values.object_properties_ := props;
-                Values.object_code := code_expr |})
+                Values.object_code := code_expr |}
           ))))
   end
 .
@@ -223,21 +233,24 @@ Definition eval_get_field context (left_expr right_expr attrs_expr : Syntax.expr
 
 (* left[right, attrs] = new_val *)
 Definition eval_set_field context (left_expr right_expr new_val_expr attrs_expr : Syntax.expression) : (Context.context * Context.result) :=
-  if_eval_return context left_expr (fun context left =>
+  if_eval_return context left_expr (fun context left_loc =>
     if_eval_return context right_expr (fun context right =>
       if_eval_return context new_val_expr (fun context new_val =>
-        assert_get_object context left (fun context object =>
-          if_eval_return context attrs_expr (fun context attrs =>
-            assert_get_string context right (fun context name =>
-              match (Values.get_object_property object name) with
-              | Some (attributes_data_of (Values.attributes_data_intro _ w e c)) =>
-                let attrs := Values.attributes_data_of (attributes_data_intro new_val w e c) in
-                let new_obj := Values.Object (Values.set_object_property object name attrs) in
-                let context := Context.add_value_at_location context left new_obj in
-                (context, Return new_val)
-              | Some (attributes_accessor_of accessor) => (BottomEvaluationContext Values.create_store, Fail "setter not implemented.")
-              | None => Context.add_value_return context Values.Undefined
-              end))))))
+        if_eval_return context attrs_expr (fun context attrs =>
+          assert_get_string context right (fun context name =>
+            assert_get_object_ptr context left_loc (fun context left_ptr =>
+              Context.update_object context left_ptr (fun object =>
+                match (Values.get_object_property object name) with
+                | Some (attributes_data_of (Values.attributes_data_intro _ w e c)) =>
+                  let attrs := Values.attributes_data_of (attributes_data_intro new_val w e c) in
+                  let new_obj := Values.set_object_property object name attrs in
+                  (new_obj, Context.Return new_val)
+                | Some (attributes_accessor_of accessor) => (object, Fail "setter not implemented.") (* TODO *)
+                | None => 
+                  let attrs := Values.attributes_data_of (attributes_data_intro new_val true true false) in
+                  let new_obj := Values.set_object_property object name attrs in
+                  (new_obj, Context.Return new_val)
+                end)))))))
 .
 
 
@@ -249,7 +262,6 @@ Definition eval_let context (id : string) (value_expr body_expr : Syntax.express
         eval_cont_terminate new_context body_expr
   ))
 .
-
 
 
 (******** Closing the loop *******)

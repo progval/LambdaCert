@@ -47,11 +47,21 @@ Definition update_store {return_type : Type} ctx (pred : Values.store -> (Values
   end
 .
 
+(* Unpacks the store from the context, calls the predicate with the store,
+* and returns the return value of the predicate. *)
+Definition read_store {return_type : Type} ctx (pred : Values.store -> return_type) : return_type :=
+  match ctx with
+  | BottomEvaluationContext store
+  | EvaluationContext _ store =>
+    pred store
+  end
+.
+
 (* Generates a new locations, assigns the value to this location in the
 * context's store, and returns the new context and this location.
 *)
-Definition add_value context (val : Values.value) : (Context.context * Values.value_loc) :=
-  update_store context (fun store => Values.add_value_to_store store val)
+Definition add_value ctx (val : Values.value) : (Context.context * Values.value_loc) :=
+  update_store ctx (fun st => Values.add_value_to_store st val)
 .
 (* Same as add_value, but wraps the loc in a Return. *)
 Definition add_value_return ctx val :=
@@ -59,8 +69,18 @@ Definition add_value_return ctx val :=
   (ctx, Return loc)
 .
 
+(* Same as add_value, but also adds the object on the object heap *)
+Definition add_object ctx (obj : Values.object) : (Context.context * Values.value_loc) :=
+  update_store ctx (fun st => Values.add_object_to_store st obj)
+.
+(* Same as add_object, but wraps the loc in a return *)
+Definition add_object_return ctx obj :=
+  let (ctx, loc) := add_object ctx obj in
+  (ctx, Return loc)
+.
+
 Definition add_named_value ctx (name : Values.id) (val : Values.value) : (Context.context * Values.value_loc) :=
-  update_store ctx (fun store => Values.add_named_value_to_store store name val)
+  update_store ctx (fun st => Values.add_named_value_to_store st name val)
 .
 
 Definition add_value_at_location ctx (loc : Values.value_loc) (val : Values.value) : Context.context :=
@@ -91,7 +111,7 @@ Definition replace_store {return_value : Type} ctx (pred : store -> (store * ret
 Definition raise_exception ctx (name : string) : (Context.context * (@Context.result Values.value_loc)) :=
   replace_store ctx (fun st =>
     let (ctx, proto_loc) := (add_value ctx Values.Undefined) in
-    match (Values.add_value_to_store st (Values.Object (Values.object_intro proto_loc name true None Heap.empty None))) with
+    match (Values.add_object_to_store st (Values.object_intro proto_loc name true None Heap.empty None)) with
     | (new_st, loc) => (new_st, Exception loc)
     end
   )
@@ -99,44 +119,41 @@ Definition raise_exception ctx (name : string) : (Context.context * (@Context.re
 
 (* Fetches the location in the context's store that has this name, if any. *)
 Definition get_loc_of_name ctx (name : Values.id) : option Values.value_loc :=
-  match ctx with
-  | BottomEvaluationContext store
-  | EvaluationContext _ store =>
-      Values.get_loc_from_store store name
-  end
+  read_store ctx (fun st => Values.get_loc_from_store st name)
 .
 
 (* Fetches the value in the context's store that has this location, if any.
 * Note: Should never return None, unless the code calling this function is
 * inconsistent (asks for a location that does not exist…). *)
 Definition get_value_of_loc ctx (loc : Values.value_loc) : option Values.value :=
-  match ctx with
-  | BottomEvaluationContext store
-  | EvaluationContext _ store =>
-      Values.get_value_from_store store loc
-  end
+  read_store ctx (fun st => Values.get_value_from_store st loc)
 .
 
 (* Returns the value associated to a variable name (aka. id) in the current
 * context. *)
 Definition get_value_of_name ctx (name : Values.id) : option Values.value :=
-  match ctx with
-  | BottomEvaluationContext store
-  | EvaluationContext _ store =>
-      match (get_loc_of_name ctx name) with
-      | Some loc => Values.get_value_from_store store loc
-      | None => None (* This should never happen (see the note of get_value_of_loc) *)
-      end
-  end
+  read_store ctx (fun st =>
+    match (get_loc_of_name ctx name) with
+    | Some loc => Values.get_value_from_store st loc
+    | None => None (* This should never happen (see the note of get_value_of_loc) *)
+    end
+  )
 .
 
-(* Unpacks a context to get the store, replaced the value at the given
-* location by a new value, and returns the new context. *)
-Definition replace_value_in_store ctx (loc : Values.value_loc) (val : Values.value) : Context.context :=
-  match ctx with
-  | BottomEvaluationContext store =>
-    BottomEvaluationContext (Values.add_value_at_location store loc val)
-  | EvaluationContext runs store =>
-    EvaluationContext runs (Values.add_value_at_location store loc val)
-  end
+
+Definition get_object_of_ptr ctx (ptr : Values.object_ptr) : option Values.object :=
+  read_store ctx (fun st => Values.get_object_from_store st ptr)
+.
+
+(* Unpacks a context to get an object, calls the predicate with this
+* object, and updates the object to the returned value. *)
+Definition update_object {return_type : Type} ctx (ptr : Values.object_ptr) (pred : Values.object -> (Values.object * (@result return_type))) : (context * (@result return_type)) :=
+  update_store ctx (fun st =>
+    match (Context.get_object_of_ptr ctx ptr) with
+    | Some obj =>
+        let (new_obj, ret) := pred obj in
+        (Values.update_object st ptr new_obj, ret)
+    | None => (st, Fail "Pointer to a non-existing object.")
+    end
+  )
 .
