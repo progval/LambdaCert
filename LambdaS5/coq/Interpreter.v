@@ -263,6 +263,17 @@ Definition eval_let context (id : string) (value_expr body_expr : Syntax.express
   ))
 .
 
+(* name := expr *)
+Definition eval_setbang context (name : string) (expr : Syntax.expression) : (Context.context * Context.result) :=
+  if_eval_return context expr (fun context value_loc =>
+    assert_deref context value_loc (fun context value =>
+      match (get_loc_of_name context name) with
+      | Some loc => (Context.add_value_at_location context loc value, Context.Return value_loc)
+      | None => raise_exception context "ReferenceError"
+      end
+  ))
+.
+
 
 (******** Closing the loop *******)
 
@@ -282,6 +293,7 @@ Definition eval context (e : Syntax.expression) : (Context.context * (@Context.r
   | Syntax.GetField left_ right_ attributes => eval_get_field context left_ right_ attributes
   | Syntax.SetField left_ right_ new_val attributes => eval_set_field context left_ right_ new_val attributes
   | Syntax.Let id value body => eval_let context id value body
+  | Syntax.SetBang id expr => eval_setbang context id expr
   | _ => (context, Fail "not implemented")
   end
 .
