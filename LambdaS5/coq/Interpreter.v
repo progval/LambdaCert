@@ -295,7 +295,6 @@ Definition eval_lambda context (args : list id) (body : Syntax.expression) : (Co
 
 
 (* Evaluates all arguments, passing the context from one to the next. *)
-(* FIXME: Do it in the right order. *)
 Definition eval_arg_list_aux (left : (Context.context * @Context.result (list Values.value_loc))) (arg_expr : Syntax.expression) : (Context.context * @Context.result (list Values.value_loc)) :=
   let (context, res) := left in
   if_return context res (fun context left_args =>
