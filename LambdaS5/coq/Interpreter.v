@@ -3,6 +3,7 @@ Require Import Coq.Strings.String.
 Require Import Syntax.
 Require Import Values.
 Require Import Context.
+Require Import Utils.
 Require Import LibHeap.
 Require Import LibStream.
 Open Scope list_scope.
@@ -118,6 +119,15 @@ Definition assert_get_object {value_type : Type} context (loc : Values.value_loc
     | None => (context, Fail "Pointer to a non-existing object.")
     end
   )
+.
+
+(* Calls the continuation if the value is a closure, and passes the closure data to the continuation *)
+Definition assert_get_closure {value_type : Type} context (loc : Values.value_loc) (cont : Context.context -> Values.loc_heap_type -> list Values.id -> Syntax.expression -> (Context.context * (@Context.result value_type))) : (Context.context * (@Context.result value_type)) :=
+  match (get_value_of_loc context loc) with
+  | Some (Values.Closure env args body) => cont context env args body
+  | Some _ => (context, Fail "Expected Closure but did not get one.")
+  | None => (context, Fail "Location of non-existing value.")
+  end
 .
 
 (* Calls the continuation if the value is a string.
@@ -281,6 +291,49 @@ Definition eval_lambda context (args : list id) (body : Syntax.expression) : (Co
 .
 
 
+(* Evaluates all arguments, passing the context from one to the next. *)
+(* FIXME: Do it in the right order. *)
+Definition eval_arg_list_aux (left : (Context.context * @Context.result (list Values.value_loc))) (arg_expr : Syntax.expression) : (Context.context * @Context.result (list Values.value_loc)) :=
+  let (context, res) := left in
+  if_return context res (fun context left_args =>
+    if_eval_return context arg_expr (fun context arg_loc =>
+      (context, Return (arg_loc :: left_args))))
+.
+
+
+Definition eval_arg_list context (args_expr : list Syntax.expression) : (Context.context * Context.result) :=
+  List.fold_left eval_arg_list_aux args_expr (context, Return nil)
+.
+
+Definition make_app_loc_heap (app_context lambda_context : Values.loc_heap_type) (args_name : list Values.id) (args : list Values.value_loc) : Values.loc_heap_type :=
+  Utils.concat_list_heap
+    (Utils.zip (List.rev args_name) args)
+    (Utils.concat_heaps lambda_context app_context)
+.
+
+Definition make_app_context context (closure_env : Values.loc_heap_type) (args_name : list Values.id) (args_expr : list Syntax.expression) : (Context.context * Context.result) :=
+  let (context, res) := eval_arg_list context args_expr in
+  if_return context res (fun context args =>
+    Context.update_store context (fun st =>
+      match st with Values.store_intro obj_heap val_heap loc_heap stream =>
+        (Values.store_intro obj_heap val_heap (make_app_loc_heap loc_heap closure_env args_name args) stream, Context.Return 0) (* We have to return something... *)
+      end
+  ))
+.
+
+
+(* f (args) *)
+Definition eval_app context (f : Syntax.expression) (args_expr : list Syntax.expression) : (Context.context * Context.result) :=
+  if_eval_return context f (fun context f_loc =>
+    assert_get_closure context f_loc (fun context env args_name body =>
+    let (context, res) := make_app_context context env args_name args_expr in
+    if_return context res (fun context _ =>
+      eval_cont_terminate context body
+  )))
+.
+        
+      
+
 (******** Closing the loop *******)
 
 (* Main evaluator *)
@@ -301,6 +354,7 @@ Definition eval context (e : Syntax.expression) : (Context.context * (@Context.r
   | Syntax.Let id value body => eval_let context id value body
   | Syntax.SetBang id expr => eval_setbang context id expr
   | Syntax.Lambda args body => eval_lambda context args body
+  | Syntax.App f args => eval_app context f args
   | _ => (context, Fail "not implemented")
   end
 .

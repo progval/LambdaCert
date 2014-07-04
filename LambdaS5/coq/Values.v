@@ -144,6 +144,12 @@ Definition add_value_at_location (st : store) (loc : value_loc) (val : value) : 
   | store_intro obj_heap val_heap loc_heap stream => (store_intro obj_heap (Heap.write val_heap loc val) (loc_heap) stream)
   end
 .
+Definition add_named_location_to_store (st : store) (name : id) (loc : value_loc) : store :=
+  match st with
+  | store_intro obj_heap val_heap loc_heap stream =>
+    store_intro obj_heap val_heap (Heap.write loc_heap name loc) stream
+  end
+.
 Definition add_named_value_to_store (st : store) (name : id) (val : value) : (store * value_loc) :=
   match st with
   | store_intro obj_heap val_heap loc_heap (loc ::: stream) => (store_intro obj_heap (Heap.write val_heap loc val) (Heap.write loc_heap name loc) stream, loc)

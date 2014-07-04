@@ -36,6 +36,16 @@ Implicit Type ctx : Context.context.
 (* Unpacks the store from the context, calls the predicate with the store,
 * gets the store returned by the predicate, and creates a new context with
 * this store. *)
+Definition update_store_simple ctx (pred : Values.store -> Values.store) : context :=
+  match ctx with
+  | BottomEvaluationContext store =>
+      BottomEvaluationContext (pred store)
+  | EvaluationContext runs store =>
+      EvaluationContext runs (pred store)
+  end
+.
+
+(* Same as update_store_simple, but allows a return value. *)
 Definition update_store {return_type : Type} ctx (pred : Values.store -> (Values.store * return_type)) : (context * return_type) :=
   match ctx with
   | BottomEvaluationContext store =>
@@ -84,8 +94,7 @@ Definition add_named_value ctx (name : Values.id) (val : Values.value) : (Contex
 .
 
 Definition add_value_at_location ctx (loc : Values.value_loc) (val : Values.value) : Context.context :=
-  let (ctx, _) := update_store ctx (fun store => (Values.add_value_at_location store loc val, 0)) in (* We have to return something... *)
-  ctx
+  update_store_simple ctx (fun store => Values.add_value_at_location store loc val)
 .
 
 (* Same as add_value, but works for options. *)

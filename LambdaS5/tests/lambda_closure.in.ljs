@@ -1,0 +1,1 @@
+let (f = (let (v = 'foo') (func () { v }))) f()
