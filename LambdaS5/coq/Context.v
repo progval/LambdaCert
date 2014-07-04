@@ -118,8 +118,8 @@ Definition replace_store {return_value : Type} ctx (pred : store -> (store * ret
 
 (* Shortcut for instanciating and throwing an exception of the given name. *)
 Definition raise_exception ctx (name : string) : (Context.context * (@Context.result Values.value_loc)) :=
-  replace_store ctx (fun st =>
-    let (ctx, proto_loc) := (add_value ctx Values.Undefined) in
+  let (ctx, proto_loc) := (add_value ctx Values.Undefined) in
+    replace_store ctx (fun st =>
     match (Values.add_object_to_store st (Values.object_intro proto_loc name true None Heap.empty None)) with
     | (new_st, loc) => (new_st, Exception loc)
     end
