@@ -100,6 +100,14 @@ Definition assert_deref {value_type : Type} context (loc : Values.value_loc) (co
   end
 .
 
+(* Calls the continuation if the value is a location to a value (always!), and passes the value to the continuation.
+* Fails otherwise. *)
+Definition assert_get {value_type : Type} context (loc : Values.value_loc) (cont : Context.context -> Values.value -> (Context.context * (@Context.result value_type))) : (Context.context * (@Context.result value_type)) :=
+  match (Context.get_value_of_loc context loc) with
+  | Some val => cont context val
+  | None => (context, Fail "Location of non-existing value.")
+  end
+.
 
 (* Calls the continuation if the value is an object pointer, and passes the pointer to the continuation.
 * Fails otherwise. *)
@@ -111,23 +119,18 @@ Definition assert_get_object_ptr {value_type : Type} context (loc : Values.value
   end
 .
 
+Definition assert_get_object_of_ptr {value_type : Type} context (ptr : Values.object_ptr) (cont : Context.context -> Values.object -> (Context.context * (@Context.result value_type))) : (Context.context * (@Context.result value_type)) :=
+  match (Context.get_object_of_ptr context ptr) with
+  | Some obj => cont context obj
+  | None => (context, Fail "Pointer to a non-existing object.")
+  end
+.
+
 (* Calls the continuation if the value is an object pointer, and passes the object to the continuation *)
 Definition assert_get_object {value_type : Type} context (loc : Values.value_loc) (cont : Context.context -> Values.object -> (Context.context * (@Context.result value_type))) : (Context.context * (@Context.result value_type)) :=
   assert_get_object_ptr context loc (fun context ptr =>
-    match (Context.get_object_of_ptr context ptr) with
-    | Some obj => cont context obj
-    | None => (context, Fail "Pointer to a non-existing object.")
-    end
+    assert_get_object_of_ptr context ptr cont
   )
-.
-
-(* Calls the continuation if the value is a closure, and passes the closure data to the continuation *)
-Definition assert_get_closure {value_type : Type} context (loc : Values.value_loc) (cont : Context.context -> Values.loc_heap_type -> list Values.id -> Syntax.expression -> (Context.context * (@Context.result value_type))) : (Context.context * (@Context.result value_type)) :=
-  match (get_value_of_loc context loc) with
-  | Some (Values.Closure env args body) => cont context env args body
-  | Some _ => (context, Fail "Expected Closure but did not get one.")
-  | None => (context, Fail "Location of non-existing value.")
-  end
 .
 
 (* Calls the continuation if the value is a string.
@@ -334,11 +337,23 @@ Definition make_app_context context (closure_env : Values.loc_heap_type) (args_n
 (* f (args) *)
 Definition eval_app context (f : Syntax.expression) (args_expr : list Syntax.expression) : (Context.context * Context.result) :=
   if_eval_return context f (fun context f_loc =>
-    assert_get_closure context f_loc (fun context env args_name body =>
-    let (context, res) := make_app_context context env args_name args_expr in
-    if_return context res (fun context _ =>
-      eval_cont_terminate context body
-  )))
+    assert_deref context f_loc (fun context f =>
+      match f with
+      | Values.Closure env args_names body =>
+        let (context, res) := make_app_context context env args_names args_expr in
+        if_return context res (fun context _ =>
+          eval_cont_terminate context body
+        )
+      | Values.Object ptr =>
+        assert_get_object_of_ptr context ptr (fun context obj =>
+          match (Values.object_code obj) with
+          | Some code => eval_cont_terminate context (Syntax.App code args_expr)
+          | None => Context.raise_exception context "Calling non-callable object."
+          end
+        )
+      | _ => (context, Fail "Expected Closure but did not get one.")
+      end
+  ))
 .
         
       
