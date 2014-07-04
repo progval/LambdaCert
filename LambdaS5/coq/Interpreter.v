@@ -146,7 +146,8 @@ Definition assert_get_string {value_type : Type} context (loc : Values.value_loc
 
 (********* Evaluators ********)
 
-(* a lonely identifier *)
+(* a lonely identifier.
+* Fetch the associated value location and return it. *)
 Definition eval_id context (name : string) : (Context.context * Context.result) :=
   match (get_loc_of_name context name) with
   | Some v => (context, Return v)
@@ -155,7 +156,9 @@ Definition eval_id context (name : string) : (Context.context * Context.result) 
 .
 
 
-(* if e_cond e_true else e_false *)
+(* if e_cond e_true else e_false.
+* Evaluate the condition and get the associated value, then evaluate
+* e_true or e_false depending on the value. *)
 Definition eval_if context (e_cond e_true e_false : Syntax.expression) : (Context.context * Context.result) :=
   if_eval_return context e_cond (fun context v =>
   match (get_value_of_loc context v) with
@@ -167,7 +170,8 @@ Definition eval_if context (e_cond e_true e_false : Syntax.expression) : (Contex
   )
 .
 
-(* e1 ; e2 *)
+(* e1 ; e2.
+* Evaluate e1, then e2, and return the value location returned by e2. *)
 Definition eval_seq context (e1 e2 : Syntax.expression) : (Context.context * Context.result) :=
   if_eval_return context e1 (fun context v => eval_cont_terminate context e2 )
 .
@@ -207,7 +211,10 @@ Definition eval_object_properties context (l : list (string * Syntax.property)) 
   eval_object_properties_aux context l Heap.empty
 .
 
-(* { [ attrs ] props } *)
+(* { [ attrs ] props }
+* Evaluate the primval attribute (if any), then the proto attribute (defaults
+* to Undefined), then properties. Finally, allocate a new object with the
+* computed values. *)
 Definition eval_object_decl context (attrs : Syntax.object_attributes) (l : list (string * Syntax.property)) : (Context.context * Context.result) :=
 
   match attrs with
@@ -230,7 +237,14 @@ Definition eval_object_decl context (attrs : Syntax.object_attributes) (l : list
   end
 .
 
-(* left[right, attrs] *)
+(* left[right, args].
+* Evaluate left, then right, then the arguments.
+* Fails if left does not evaluate to a location of an object pointer.
+* Otherwise, if the `right` attribute of the object pointed to by `left`
+* is a value field, return it; and if it is an “accessor field”, call
+* the getter with the arguments.
+* Note the arguments are evaluated even if they are not passed to any
+* function. *)
 Definition eval_get_field context (left_expr right_expr attrs_expr : Syntax.expression) : (Context.context * Context.result) :=
   if_eval_return context left_expr (fun context left =>
     if_eval_return context right_expr (fun context right =>
@@ -244,7 +258,15 @@ Definition eval_get_field context (left_expr right_expr attrs_expr : Syntax.expr
             end)))))
 .
 
-(* left[right, attrs] = new_val *)
+(* left[right, attrs] = new_val
+* Evaluate left, then right, then the arguments, then the new_val.
+* Fails if left does not evaluate to a location of an object pointer.
+* Otherwise, if the `right` attribute of the object pointed to by `left`
+* is a value field, set it to the `new_val` and return the `new_val`;
+* and if it is an “accessor field”, call the getter with the arguments,
+* with the `new_val` prepended to the list.
+* Note the arguments are evaluated even if they are not passed to any
+* function. *)
 Definition eval_set_field context (left_expr right_expr new_val_expr attrs_expr : Syntax.expression) : (Context.context * Context.result) :=
   if_eval_return context left_expr (fun context left_loc =>
     if_eval_return context right_expr (fun context right =>
@@ -267,7 +289,10 @@ Definition eval_set_field context (left_expr right_expr new_val_expr attrs_expr 
 .
 
 
-(* let (id = expr) body *)
+(* let (id = expr) body
+* Evaluate expr, set it to a fresh location in the context, and bind this
+* location to the name `id` in the context.
+* Evaluate the body in the new context. *)
 Definition eval_let context (id : string) (value_expr body_expr : Syntax.expression) : (Context.context * Context.result) :=
   if_eval_return context value_expr (fun context value_loc =>
     assert_deref context value_loc (fun context value =>
@@ -276,7 +301,9 @@ Definition eval_let context (id : string) (value_expr body_expr : Syntax.express
   ))
 .
 
-(* name := expr *)
+(* name := expr
+* Evaluate expr, and set it at the location bound to `name`. Fail if `name`
+* is not associated with a location in the context. *)
 Definition eval_setbang context (name : string) (expr : Syntax.expression) : (Context.context * Context.result) :=
   if_eval_return context expr (fun context value_loc =>
     assert_deref context value_loc (fun context value =>
@@ -287,7 +314,8 @@ Definition eval_setbang context (name : string) (expr : Syntax.expression) : (Co
   ))
 .
 
-(* func (args) { body } *)
+(* func (args) { body }
+* Capture the environment's name-to-location heap and return a closure. *)
 Definition eval_lambda context (args : list id) (body : Syntax.expression) : (Context.context * Context.result) :=
   let env := Context.read_store context Values.loc_heap in
   Context.add_value_return context (Values.Closure env args body)
@@ -333,7 +361,17 @@ Definition make_app_context context (closure_env : Values.loc_heap_type) (args_n
 .
 
 
-(* f (args) *)
+(* f (args)
+* If f is a closure and there are as many arguments as the arity of f,
+* call f's body with the current context, with the name-to-location map
+* modified this way: for all `var`,
+* * if `var` is the name of one of the arguments, then `var` maps to
+*   the location of the value computed when evaluating this argument
+* * else, if `var` is the name of one of the variable in f's closure,
+*   then `var` maps to the location associated with in the closure.
+* * else, `var` is left unchanged (ie. if it was mapped to a location,
+*   it still maps to this location; and if it did not map to anything,
+*   it still does not map to anything). *)
 Definition eval_app context (f : Syntax.expression) (args_expr : list Syntax.expression) : (Context.context * Context.result) :=
   if_eval_return context f (fun context f_loc =>
     assert_deref context f_loc (fun context f =>
