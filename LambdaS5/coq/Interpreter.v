@@ -305,10 +305,15 @@ Definition eval_arg_list context (args_expr : list Syntax.expression) : (Context
   List.fold_left eval_arg_list_aux args_expr (context, Return nil)
 .
 
-Definition make_app_loc_heap (app_context lambda_context : Values.loc_heap_type) (args_name : list Values.id) (args : list Values.value_loc) : Values.loc_heap_type :=
-  Utils.concat_list_heap
-    (Utils.zip (List.rev args_name) args)
-    (Utils.concat_heaps lambda_context app_context)
+Definition make_app_loc_heap (app_context lambda_context : Values.loc_heap_type) (args_name : list Values.id) (args : list Values.value_loc) : option Values.loc_heap_type :=
+  match (Utils.zip_left (List.rev args_name) args) with
+  | Some args_heap =>
+    Some (Utils.concat_list_heap
+      args_heap
+      (Utils.concat_heaps lambda_context app_context)
+    )
+  | None => None
+  end
 .
 
 Definition make_app_context context (closure_env : Values.loc_heap_type) (args_name : list Values.id) (args_expr : list Syntax.expression) : (Context.context * Context.result) :=
@@ -316,7 +321,11 @@ Definition make_app_context context (closure_env : Values.loc_heap_type) (args_n
   if_return context res (fun context args =>
     Context.update_store context (fun st =>
       match st with Values.store_intro obj_heap val_heap loc_heap stream =>
-        (Values.store_intro obj_heap val_heap (make_app_loc_heap loc_heap closure_env args_name args) stream, Context.Return 0) (* We have to return something... *)
+        match (make_app_loc_heap loc_heap closure_env args_name args) with
+        | Some new_loc_heap =>
+          (Values.store_intro obj_heap val_heap new_loc_heap stream, Context.Return 0) (* We have to return something... *)
+        | None => (st, Fail "Arity mismatch")
+        end
       end
   ))
 .

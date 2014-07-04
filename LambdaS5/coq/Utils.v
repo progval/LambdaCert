@@ -16,16 +16,20 @@ Definition concat_heaps {X Y : Type} (front back : Heap.heap X Y) :=
 .
 
 
-Fixpoint zip_aux {X Y : Type} (lx : list X) (ly : list Y) (acc : list (X * Y)) : list (X * Y) :=
+Fixpoint zip_aux {X Y : Type} (lx : list X) (ly : list Y) (acc : list (X * Y)) : option (list (X * Y)) :=
   match lx with
-  | nil => acc
+  | nil =>
+      match ly with
+      | nil => Some acc
+      | _ => None
+      end
   | x_head :: x_tail =>
       match ly with
-      | nil => acc
+      | nil => None
       | y_head :: y_tail => zip_aux x_tail y_tail ((x_head, y_head) :: acc)
       end
   end
 .
-Definition zip {X Y : Type} (lx : list X) (ly : list Y) : list (X * Y) :=
+Definition zip_left {X Y : Type} (lx : list X) (ly : list Y) : option (list (X * Y)) :=
   zip_aux lx ly nil
 .
