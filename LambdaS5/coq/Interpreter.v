@@ -401,6 +401,7 @@ Definition eval runs store (e : Syntax.expression) : (Store.store * (@Context.re
   ) in
   match e with
   | Syntax.Undefined => return_value Values.Undefined
+  | Syntax.Null => return_value Values.Null
   | Syntax.String s => return_value (Values.String s)
   | Syntax.Number n => return_value (Values.Number n)
   | Syntax.True => return_value Values.True
@@ -412,10 +413,25 @@ Definition eval runs store (e : Syntax.expression) : (Store.store * (@Context.re
   | Syntax.GetField left_ right_ attributes => eval_get_field runs store left_ right_ attributes
   | Syntax.SetField left_ right_ new_val attributes => eval_set_field runs store left_ right_ new_val attributes
   | Syntax.Let id value body => eval_let runs store id value body
+  | Syntax.Rec id value body => (store, Fail "Rec not implemented.")
   | Syntax.SetBang id expr => eval_setbang runs store id expr
   | Syntax.Lambda args body => eval_lambda runs store args body
   | Syntax.App f args => eval_app runs store f args
-  | _ => (store, Fail "not implemented")
+  | Syntax.DeleteField left_ right_ => (store, Fail "DeleteField not implemented.")
+  | Syntax.GetAttr left_ right_ field => (store, Fail "GetAttr not implemented.")
+  | Syntax.SetAttr left_ right_ field newval => (store, Fail "SetAttr not implemented.")
+  | Syntax.GetObjAttr oattr obj => (store, Fail "GetObjAttr not implemented.")
+  | Syntax.SetObjAttr oattr obj attr => (store, Fail "SetObjAttr not implemented.")
+  | Syntax.OwnFieldNames obj => (store, Fail "OwnFieldNames not implemented.")
+  | Syntax.Op1 op e => (store, Fail "Op1 not implemented.")
+  | Syntax.Op2 op e1 e2 => (store, Fail "Op2 not implemented.")
+  | Syntax.Label l e => (store, Fail "Label not implemented.")
+  | Syntax.Break l e => (store, Fail "Break not implemented.")
+  | Syntax.TryCatch body catch => (store, Fail "TryCatch not implemented.")
+  | Syntax.TryFinally body fin => (store, Fail "TryFinally not implemented.")
+  | Syntax.Throw e => (store, Fail "Throw not implemented.")
+  | Syntax.Eval e bindings => (store, Fail "Eval not implemented.")
+  | Syntax.Hint _ e => eval_cont_terminate runs store e
   end
 .
 
