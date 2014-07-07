@@ -15,8 +15,26 @@ make
 
 ## Running the interpreter:
 
+The simplest example:
+
 ```
-./build/run.byte < file.ljs
+./build/run.byte file.ljs
+```
+
+
+You can also use stdin:
+
+```
+echo "(func (foo, bar) { bar })('first', 'second')" | ./build/run.byte stdin
+```
+
+
+You can execute multiple files. The last one has to be a LambdaJS code file,
+and all the previous ones have to be LambdaJS environment files.
+For instance:
+
+```
+./build/run.byte ~/js/LambdaS5/envs/es5.env file.ljs
 ```
 
 
