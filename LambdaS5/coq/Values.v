@@ -161,6 +161,13 @@ Definition update_object (st : store) (ptr : object_ptr) (new_obj : object) : st
   | store_intro obj_heap val_heap loc_heap stream => (store_intro (Heap.write obj_heap ptr new_obj) val_heap (loc_heap) stream)
   end
 .
+Definition add_option_value st (oval : option value) : (store * option Values.value_loc) :=
+  match oval with
+  | Some val => let (st, loc) := Values.add_value_to_store st val in (st, Some loc)
+  | None => (st, None)
+  end
+.
+
 
 
 Definition get_object_from_store (st : store) (ptr : object_ptr) : option object :=
@@ -171,4 +178,13 @@ Definition get_value_from_store (st : store) (loc : value_loc) : option value :=
 .
 Definition get_loc_from_store (st : store) (name : id) : option value_loc :=
   Heap.read_option (loc_heap st) name
+.
+
+(* Returns the value associated to a variable name (aka. id) in the current
+* context. *)
+Definition get_value_of_name store (name : Values.id) : option Values.value :=
+  match (get_loc_from_store store name) with
+  | Some loc => get_value_from_store store loc
+  | None => None
+  end
 .
