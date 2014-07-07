@@ -223,4 +223,4 @@ Extract Inductive String.string => "string" [ """""" "(^)" ]. *)
 
 Extraction Blacklist String List Bool.
 
-Separate Extraction Interpreter Values Syntax JsNumber.to_string.
+Separate Extraction Interpreter Values Syntax Store JsNumber.to_string.

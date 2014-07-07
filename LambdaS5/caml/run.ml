@@ -14,7 +14,7 @@ let parse_es5 cin name =
 
 
 let _ =
-  let (store, result) = Interpreter.runs_eval 1000 Values.create_store (parse_es5 stdin "stdin") in
+  let (store, result) = Interpreter.runs_eval 1000 Store.create_store (parse_es5 stdin "stdin") in
   (match result with
   | Context.Return v -> print_string (PrettyPrint.string_of_value_loc 5 store v)
   | Context.Exception e -> print_string "Uncaught exception: "; print_string (PrettyPrint.string_of_value_loc 5 store e)

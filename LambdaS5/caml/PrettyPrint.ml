@@ -2,7 +2,7 @@ let rec string_of_value_loc depth st loc =
   if (depth = 0) then
     "<cut>"
   else
-    match (Values.get_value_from_store st loc) with
+    match (Store.get_value st loc) with
       | None -> "<reference to non-existing value>"
       | Some v -> string_of_value (depth-1) st v
 and string_of_value depth st = function
@@ -22,7 +22,7 @@ and string_of_value_loc_option depth st = function
 | None -> "<unset val>"
 
 and string_of_object_ptr depth st ptr =
-  match (Values.get_object_from_store st ptr) with
+  match (Store.get_object st ptr) with
     | None -> "<reference to non-existing object>"
     | Some obj -> string_of_object depth st obj
 and string_of_object depth st obj =

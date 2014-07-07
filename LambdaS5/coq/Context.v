@@ -1,5 +1,6 @@
 Require Import String.
 Require Import Values.
+Require Import Store.
 
 (* Utilities for the Interpreter. *)
 
@@ -15,7 +16,7 @@ Inductive result {value_type : Type} : Type :=
 .
 
 Definition runner_type (runner_arg : Type) :=
-  Values.store -> runner_arg -> (Values.store * (@result Values.value_loc))
+  Store.store -> runner_arg -> (Store.store * (@result Values.value_loc))
 .
 Record runs_type : Type := runs_type_intro {
     runs_type_eval : runner_type Syntax.expression;
@@ -23,9 +24,9 @@ Record runs_type : Type := runs_type_intro {
 }.
 
 (* Shortcut for instanciating and throwing an exception of the given name. *)
-Definition raise_exception store (name : string) : (Values.store * (@Context.result Values.value_loc)) :=
-  let (store, proto_loc) := (Values.add_value_to_store store Values.Undefined) in
-  match (Values.add_object_to_store store (Values.object_intro proto_loc name true None Heap.empty None)) with
+Definition raise_exception store (name : string) : (Store.store * (@Context.result Values.value_loc)) :=
+  let (store, proto_loc) := (Store.add_value store Values.Undefined) in
+  match (Store.add_object store (Values.object_intro proto_loc name true None Heap.empty None)) with
   | (new_st, loc) => (new_st, Exception loc)
   end
 .
@@ -33,11 +34,11 @@ Definition raise_exception store (name : string) : (Values.store * (@Context.res
 
 (* Unpacks a store to get an object, calls the predicate with this
 * object, and updates the object to the returned value. *)
-Definition update_object {return_type : Type} store (ptr : Values.object_ptr) (pred : Values.object -> (Values.object * (@result return_type))) : (Values.store * (@result return_type)) :=
-  match (Values.get_object_from_store store ptr) with
+Definition update_object {return_type : Type} store (ptr : Values.object_ptr) (pred : Values.object -> (Values.object * (@result return_type))) : (Store.store * (@result return_type)) :=
+  match (Store.get_object store ptr) with
   | Some obj =>
       let (new_obj, ret) := pred obj in
-      (Values.update_object store ptr new_obj, ret)
+      (Store.update_object store ptr new_obj, ret)
   | None => (store, Fail "Pointer to a non-existing object.")
   end
 .
