@@ -302,6 +302,19 @@ Definition eval_let runs store (id : string) (value_expr body_expr : Syntax.expr
   ))
 .
 
+(* rec (id = expr) body
+* Evaluate expr with a reference to itself, set it to a fresh location in the store,
+* and bind this location to the name `id` in the store.
+* Evaluate the body in the new store. *)
+Definition eval_rec runs store (id : string) (value_expr body_expr : Syntax.expression) : (Store.store * Context.result) :=
+  let (store, self_loc) := Store.add_named_value store id Values.Undefined in
+  if_eval_return runs store value_expr (fun store value_loc =>
+    assert_deref store value_loc (fun value =>
+      let store := Store.add_value_at_location store self_loc value in
+        eval_cont_terminate runs store body_expr
+  ))
+.
+
 (* name := expr
 * Evaluate expr, and set it at the location bound to `name`. Fail if `name`
 * is not associated with a location in the store. *)
@@ -373,6 +386,7 @@ Definition make_app_store runs store (closure_env : Values.loc_heap_type) (args_
 * * else, `var` is left unchanged (ie. if it was mapped to a location,
 *   it still maps to this location; and if it did not map to anything,
 *   it still does not map to anything). *)
+(* TODO: fix context handling so variables are actually local. *)
 Definition eval_app runs store (f : Syntax.expression) (args_expr : list Syntax.expression) : (Store.store * Context.result) :=
   if_eval_return runs store f (fun store f_loc =>
     let (store, res) := ((Context.runs_type_get_closure runs) store f_loc) in
@@ -413,7 +427,7 @@ Definition eval runs store (e : Syntax.expression) : (Store.store * (@Context.re
   | Syntax.GetField left_ right_ attributes => eval_get_field runs store left_ right_ attributes
   | Syntax.SetField left_ right_ new_val attributes => eval_set_field runs store left_ right_ new_val attributes
   | Syntax.Let id value body => eval_let runs store id value body
-  | Syntax.Rec id value body => (store, Fail "Rec not implemented.")
+  | Syntax.Rec id value body => eval_rec runs store id value body
   | Syntax.SetBang id expr => eval_setbang runs store id expr
   | Syntax.Lambda args body => eval_lambda runs store args body
   | Syntax.App f args => eval_app runs store f args
