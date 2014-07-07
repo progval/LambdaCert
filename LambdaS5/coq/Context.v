@@ -24,7 +24,7 @@ Record runs_type : Type := runs_type_intro {
 
 (* Shortcut for instanciating and throwing an exception of the given name. *)
 Definition raise_exception store (name : string) : (Values.store * (@Context.result Values.value_loc)) :=
-  let (st, proto_loc) := (Values.add_value_to_store store Values.Undefined) in
+  let (store, proto_loc) := (Values.add_value_to_store store Values.Undefined) in
   match (Values.add_object_to_store store (Values.object_intro proto_loc name true None Heap.empty None)) with
   | (new_st, loc) => (new_st, Exception loc)
   end
