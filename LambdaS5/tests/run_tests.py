@@ -33,7 +33,7 @@ for test in map(lambda x:x[0:-len('.in.ljs')],
         continue
     with open(in_) as in_fd:
         try:
-            output = subprocess.check_output([EXE], stdin=in_fd)
+            output = subprocess.check_output([EXE, 'stdin'], stdin=in_fd)
         except subprocess.CalledProcessError:
             fails.append(test)
             continue
