@@ -65,7 +65,7 @@ Record object := object_intro {
    object_extensible : bool;
    object_prim_value : option value_loc;
    object_properties_ : object_properties;
-   object_code : option Syntax.expression }.
+   object_code : option value_loc }.
 
 Definition get_object_property (object : object) (name : prop_name) : option attributes :=
   Heap.read_option (object_properties_ object) name

@@ -71,3 +71,7 @@ Definition add_value_return store v :=
   let (store, loc) := Store.add_value store v in
   (store, Return loc)
 .
+
+Definition return_bool store (b : bool) :=
+  add_value_return store (if b then Values.True else Values.False)
+.

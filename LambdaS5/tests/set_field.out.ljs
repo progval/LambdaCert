@@ -1,1 +1,1 @@
-{[#proto: undefined, #class: Object, #extensible: true, #primval: <unset val>, #code: <unset expr>] 'bar': {#value "two", #writable true, #configurable false, #enumerable true}}
+{[#proto: undefined, #class: Object, #extensible: true, #primval: <unset val>, #code: <unset val>] 'bar': {#value "two", #writable true, #configurable false, #enumerable true}}

@@ -116,7 +116,7 @@ Definition eval_object_decl runs store (attrs : Syntax.object_attributes) (l : l
                 Values.object_extensible := extensible;
                 Values.object_prim_value := primval_loc;
                 Values.object_properties_ := props;
-                Values.object_code := code_expr |}
+                Values.object_code := code |}
             in (store, Context.Return loc)
           ))))
   end
@@ -326,6 +326,26 @@ Definition eval_setattr runs store left_expr right_expr attr new_val_expr :=
 .
             
         
+Definition eval_getobjattr runs store obj_expr oattr :=
+  if_eval_return runs store obj_expr (fun store obj_loc =>
+    assert_get_object store obj_loc (fun obj =>
+      match oattr with
+      | Syntax.Proto => (store, Return (Values.object_proto obj))
+      | Syntax.Extensible => Context.return_bool store (Values.object_extensible obj)
+      | Syntax.Code =>
+        match (Values.object_code obj) with
+        | Some code => (store, Return code)
+        | None => Context.add_value_return store Values.Null
+        end
+      | Syntax.Primval =>
+        match (Values.object_prim_value obj) with
+        | Some v => (store, Return v)
+        | None => (store, Fail "primval attribute is None.")
+        end
+      | Syntax.Class => Context.add_value_return store (Values.String (Values.object_class obj))
+      end
+  ))
+.
 
       
 
@@ -355,7 +375,7 @@ Definition eval runs store (e : Syntax.expression) : (Store.store * (@Context.re
   | Syntax.DeleteField left_ right_ => (store, Fail "DeleteField not implemented.")
   | Syntax.GetAttr attr left_ right_ => (store, Fail "GetAttr not implemented.")
   | Syntax.SetAttr attr left_ right_ newval => eval_setattr runs store left_ right_ attr newval
-  | Syntax.GetObjAttr oattr obj => (store, Fail "GetObjAttr not implemented.")
+  | Syntax.GetObjAttr oattr obj => eval_getobjattr runs store obj oattr
   | Syntax.SetObjAttr oattr obj attr => (store, Fail "SetObjAttr not implemented.")
   | Syntax.OwnFieldNames obj => (store, Fail "OwnFieldNames not implemented.")
   | Syntax.Op1 op e =>
@@ -389,7 +409,8 @@ Definition get_closure runs store (loc : Values.value_loc) : (Store.store * (@Co
       assert_get_object_from_ptr store ptr (fun obj =>
         match (Values.object_code obj) with
         | None => (store, Fail "Applied an object without a code attribute")
-        | Some loc => eval_cont_terminate runs store loc
+        | Some loc =>
+          (Context.runs_type_get_closure runs) store loc
         end
       )
     | _ => (store, Fail "Applied non-function.")
