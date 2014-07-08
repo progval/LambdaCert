@@ -1,1 +1,1 @@
-let (obj = {[] 'foo': {#value 'bar', #writable true}}) (obj['foo'<#writable> = false]; obj)
+let (obj = {[]}) (obj['foo'<#writable> = false]; obj)

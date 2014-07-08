@@ -297,7 +297,7 @@ Definition set_property_attribute store (oprop : option Values.attributes) (attr
   let raao := (fun x => (store, Some (Values.attributes_accessor_of x), true_ret)) in
   let rado := (fun x => (store, Some (Values.attributes_data_of x), true_ret)) in
   match oprop with
-  | Some prop =>
+  | None =>
     match attr with
     | Syntax.Getter => raao (aai new_val undef_loc false false)
     | Syntax.Setter => raao (aai undef_loc new_val false false)
@@ -309,7 +309,7 @@ Definition set_property_attribute store (oprop : option Values.attributes) (attr
     | Syntax.Config => assert_get_bool_3 store new_val oprop (fun b =>
       rado (adi undef_loc false true b))
     end
-  | None => (store, oprop, Fail "setattr on non-existing field not implemented.")
+  | Some prop => (store, oprop, Fail "setattr on existing field not implemented.")
   end
 .
 
