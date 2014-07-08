@@ -167,7 +167,7 @@ Definition eval_set_field runs store (left_expr right_expr new_val_expr attrs_ex
                   (store, Some attrs, Context.Return new_val)
                 | Some (attributes_accessor_of accessor) => (store, prop, Fail "setter not implemented.") (* TODO *)
                 | None => 
-                  let attrs := Values.attributes_data_of (attributes_data_intro new_val true true false) in
+                  let attrs := Values.attributes_data_of (attributes_data_intro new_val true true true) in
                   (store, Some attrs, Context.Return new_val)
                 end)))))))
 .
@@ -289,27 +289,77 @@ Definition eval_app runs store (f : Syntax.expression) (args_expr : list Syntax.
 
 
 Definition set_property_attribute store (oprop : option Values.attributes) (attr : Syntax.property_attribute_name) (new_val : Values.value_loc) : (Store.store * (option Values.attributes) * Context.result) :=
-  let (store, undef_loc) := Store.add_value store Values.Undefined in
+  let (store, undef) := Store.add_value store Values.Undefined in
   let (store, true_ret) := Context.add_value_return store Values.True in
   (* Some abbreviations: *)
   let aai := Values.attributes_accessor_intro in
   let adi := Values.attributes_data_intro in
-  let raao := (fun x => (store, Some (Values.attributes_accessor_of x), true_ret)) in
-  let rado := (fun x => (store, Some (Values.attributes_data_of x), true_ret)) in
+  let aao := Values.attributes_accessor_of in
+  let ado := Values.attributes_data_of in
+  let raao := (fun x => (store, Some (aao x), true_ret)) in
+  let rado := (fun x => (store, Some (ado x), true_ret)) in
+  let getbool := assert_get_bool_3 store new_val oprop in
   match oprop with
   | None =>
     match attr with
-    | Syntax.Getter => raao (aai new_val undef_loc false false)
-    | Syntax.Setter => raao (aai undef_loc new_val false false)
+    | Syntax.Getter => raao (aai new_val undef false false)
+    | Syntax.Setter => raao (aai undef new_val false false)
     | Syntax.Value => rado (adi new_val false false false)
-    | Syntax.Writable => assert_get_bool_3 store new_val oprop (fun b =>
-      rado (adi undef_loc b false false))
-    | Syntax.Enum => assert_get_bool_3 store new_val oprop (fun b =>
-      rado (adi undef_loc false b true))
-    | Syntax.Config => assert_get_bool_3 store new_val oprop (fun b =>
-      rado (adi undef_loc false true b))
+    | Syntax.Writable => getbool (fun b => rado (adi undef b false false))
+    | Syntax.Enum => getbool (fun b => rado (adi undef false b true))
+    | Syntax.Config => getbool (fun b => rado (adi undef false true b))
     end
-  | Some prop => (store, oprop, Fail "setattr on existing field not implemented.")
+  | Some prop =>
+    match (attr, prop) with
+    (* Set #writable of data when #writable is true *)
+    | (Writable, attributes_data_of (attributes_data_intro val true enum config)) =>
+        getbool (fun b =>      rado (attributes_data_intro val b    enum config))
+    (* Set #writable of data when #configurable is true *)
+    | (Writable, attributes_data_of (attributes_data_intro val writ enum true)) =>
+        getbool (fun b =>      rado (attributes_data_intro val b    enum true))
+    (* Set #value of data when #writable is true *)
+    | (Value, attributes_data_of (attributes_data_intro _       true enum config)) =>
+                            rado (attributes_data_intro new_val true enum config)
+    (* Set #setter when #configurable is true *)
+    | (Setter,     attributes_data_of (attributes_data_intro     _      _       enum true))
+    | (Setter, attributes_accessor_of (attributes_accessor_intro _      _       enum true)) =>
+                                 raao (attributes_accessor_intro undef  new_val enum true)
+    (* Set #getter when #configurable is true *)
+    | (Getter,     attributes_data_of (attributes_data_intro     _       _     enum true))
+    | (Getter, attributes_accessor_of (attributes_accessor_intro _       _     enum true)) =>
+                                 raao (attributes_accessor_intro new_val undef enum true)
+    (* Set #value of accessor when #configurable is true *)
+    | (Value,  attributes_accessor_of (attributes_accessor_intro _       _     enum true)) =>
+                                 rado (attributes_data_intro     new_val false enum true)
+    (* Set #writable of accessor when #configurable is true *)
+    | (Writable, attributes_accessor_of (attributes_accessor_intro _     _ enum true)) =>
+        getbool (fun b =>          rado (attributes_data_intro     undef b enum true))
+    (* Set #enumerable when #configurable is true *)
+    | (Enum,     attributes_data_of (attributes_data_intro     val writ _ true)) =>
+        getbool (fun b =>      rado (attributes_data_intro     val writ b true))
+    | (Enum, attributes_accessor_of (attributes_accessor_intro get set  _ true)) =>
+        getbool (fun b =>      raao (attributes_accessor_intro get set  b true))
+    (* Set #configurable when #configurable is true *)
+    | (Config,     attributes_data_of (attributes_data_intro     val writ enum true)) =>
+        getbool (fun b =>        rado (attributes_data_intro     val writ enum b   ))
+    | (Config, attributes_accessor_of (attributes_accessor_intro get set  enum true)) =>
+        getbool (fun b =>        raao (attributes_accessor_intro get set  enum b   ))
+    (* Set #configurable to false when #configurable is false *)
+    | (Config,     attributes_data_of (attributes_data_intro     _ _ _ false))
+    | (Config, attributes_accessor_of (attributes_accessor_intro _ _ _ false)) =>
+      getbool (fun b =>
+        if b then (store, oprop, Fail "Set #configurable to true while #configurable is false")
+        else (store, oprop, true_ret) (* unchanged *)
+      )
+    | (Value, _) => (store, oprop, Fail "Invalid #value set.")
+    | (Writable, _) => (store, oprop, Fail "Invalid #writable set.")
+    | (Getter, _) => (store, oprop, Fail "Invalid #getter set.")
+    | (Setter, _) => (store, oprop, Fail "Invalid #setter set.")
+    | (Enum,     attributes_data_of (attributes_data_intro     _ _ _ false)) =>
+        (store, oprop, Fail "Invalid #enum set for data property.")
+    | (Enum, attributes_accessor_of (attributes_accessor_intro _ _ _ false)) =>
+        (store, oprop, Fail "Invalid #enum set for accessor property.")
+    end
   end
 .
 
