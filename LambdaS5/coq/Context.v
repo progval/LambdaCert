@@ -1,3 +1,4 @@
+Require Import Utils.
 Require Import String.
 Require Import Values.
 Require Import Store.
@@ -31,14 +32,36 @@ Definition raise_exception store (name : string) : (Store.store * (@Context.resu
   end
 .
 
-
 (* Unpacks a store to get an object, calls the predicate with this
 * object, and updates the object to the returned value. *)
-Definition update_object {return_type : Type} store (ptr : Values.object_ptr) (pred : Values.object -> (Values.object * (@result return_type))) : (Store.store * (@result return_type)) :=
+Definition update_object {return_type : Type} store (ptr : Values.object_ptr) (pred : Values.object -> (Store.store * Values.object * (@result return_type))) : (Store.store * (@result return_type)) :=
   match (Store.get_object store ptr) with
   | Some obj =>
-      let (new_obj, ret) := pred obj in
-      (Store.update_object store ptr new_obj, ret)
+      match (pred obj) with (store, new_obj, ret) =>
+        (Store.update_object store ptr new_obj, ret)
+      end
   | None => (store, Fail "Pointer to a non-existing object.")
   end
+.
+
+
+(* Fetches the object pointed by the ptr, gets the property associated
+* with the name and passes it to the predicate (as an option).
+* If the predicate returns None as the now property, the property is
+* destroyed; otherwise it is updated/created with the one returned by
+* the predicate. *)
+Definition update_object_property {return_type : Type} store (ptr : Values.object_ptr) (name : Values.prop_name) (pred : option Values.attributes -> (Store.store * option Values.attributes * (@result return_type))) : (Store.store * (@result return_type)) :=
+  let key_equal_pred := (fun x => match x with (k, _) => (if (String.string_dec k name) then false else true) end) in
+  update_object store ptr (fun obj =>
+    match obj with (Values.object_intro prot cl ext prim props code) =>
+      match (pred (Values.get_object_property obj name)) with
+      | (store, Some prop, res) =>
+          let new_props := (Heap.write (Utils.heap_filter props key_equal_pred) name prop) in
+          (store, Values.object_intro prot cl ext prim new_props code, res)
+      | (store, None, res) =>
+          let new_props := (Utils.heap_filter props key_equal_pred) in
+          (store, Values.object_intro prot cl ext prim new_props code, res)
+      end
+    end
+  )
 .

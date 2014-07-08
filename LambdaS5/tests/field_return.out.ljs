@@ -1,1 +1,1 @@
-{[#proto: Foobar, #class: Object, #extensible: true, #primval: <unset val>, #code: <unset expr>] }
+{[#proto: "Foobar", #class: Object, #extensible: true, #primval: <unset val>, #code: <unset expr>] }

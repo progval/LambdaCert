@@ -141,6 +141,16 @@ Definition assert_get_string {value_type : Type} store (loc : Values.value_loc) 
   end
 .
 
+(* Calls the continuation if the value is a boolean.
+* Fails otherwise. *)
+Definition assert_get_bool_3 {value_type : Type} {X : Type} store (loc : Values.value_loc) (default : X) (cont : bool -> (Store.store * X * (@Context.result value_type))) : (Store.store * X * (@Context.result value_type)) :=
+  match (Store.get_value store loc) with
+  | Some Values.True => cont true
+  | Some Values.False => cont false
+  | Some _ => (store, default, Fail "Expected True or False but got none of them.")
+  | None => (store, default, Fail "Location of non-existing value.")
+  end
+.
 
 (********* Evaluators ********)
 
@@ -275,17 +285,15 @@ Definition eval_set_field runs store (left_expr right_expr new_val_expr attrs_ex
         if_eval_return runs store attrs_expr (fun store attrs =>
           assert_get_string store right (fun name =>
             assert_get_object_ptr store left_loc (fun left_ptr =>
-              Context.update_object store left_ptr (fun object =>
-                match (Values.get_object_property object name) with
+              Context.update_object_property store left_ptr name (fun prop =>
+                match (prop) with
                 | Some (attributes_data_of (Values.attributes_data_intro _ w e c)) =>
                   let attrs := Values.attributes_data_of (attributes_data_intro new_val w e c) in
-                  let new_obj := Values.set_object_property object name attrs in
-                  (new_obj, Context.Return new_val)
-                | Some (attributes_accessor_of accessor) => (object, Fail "setter not implemented.") (* TODO *)
+                  (store, Some attrs, Context.Return new_val)
+                | Some (attributes_accessor_of accessor) => (store, prop, Fail "setter not implemented.") (* TODO *)
                 | None => 
                   let attrs := Values.attributes_data_of (attributes_data_intro new_val true true false) in
-                  let new_obj := Values.set_object_property object name attrs in
-                  (new_obj, Context.Return new_val)
+                  (store, Some attrs, Context.Return new_val)
                 end)))))))
 .
 
@@ -403,6 +411,47 @@ Definition eval_app runs store (f : Syntax.expression) (args_expr : list Syntax.
   )))
 .
         
+
+
+Definition set_property_attribute store (oprop : option Values.attributes) (attr : Syntax.property_attribute_name) (new_val : Values.value_loc) : (Store.store * (option Values.attributes) * Context.result) :=
+  let (store, undef_loc) := Store.add_value store Values.Undefined in
+  let (store, true_loc) := Store.add_value store Values.True in
+  (* Some abbreviations: *)
+  let aai := Values.attributes_accessor_intro in
+  let adi := Values.attributes_data_intro in
+  let raao := (fun x => (store, Some (Values.attributes_accessor_of x), Return true_loc)) in
+  let rado := (fun x => (store, Some (Values.attributes_data_of x), Return true_loc)) in
+  match oprop with
+  | Some prop =>
+    match attr with
+    | Syntax.Getter => raao (aai new_val undef_loc false false)
+    | Syntax.Setter => raao (aai undef_loc new_val false false)
+    | Syntax.Value => rado (adi new_val false false false)
+    | Syntax.Writable => assert_get_bool_3 store new_val oprop (fun b =>
+      rado (adi undef_loc b false false))
+    | Syntax.Enum => assert_get_bool_3 store new_val oprop (fun b =>
+      rado (adi undef_loc false b true))
+    | Syntax.Config => assert_get_bool_3 store new_val oprop (fun b =>
+      rado (adi undef_loc false true b))
+    end
+  | None => (store, oprop, Fail "setattr on non-existing field not implemented.")
+  end
+.
+
+(* left[right<attr> = new_val] *)
+Definition eval_setattr runs store left_expr right_expr attr new_val_expr :=
+  if_eval_return runs store left_expr (fun store left_ =>
+    if_eval_return runs store right_expr (fun store right_ =>
+      if_eval_return runs store new_val_expr (fun store new_val =>
+        assert_get_object_ptr store left_ (fun obj_ptr =>
+          assert_get_string store right_ (fun fieldname =>
+            Context.update_object_property store obj_ptr fieldname (fun oprop =>
+              set_property_attribute store oprop attr new_val
+  ))))))
+.
+            
+        
+
       
 
 (******** Closing the loop *******)
@@ -432,8 +481,8 @@ Definition eval runs store (e : Syntax.expression) : (Store.store * (@Context.re
   | Syntax.Lambda args body => eval_lambda runs store args body
   | Syntax.App f args => eval_app runs store f args
   | Syntax.DeleteField left_ right_ => (store, Fail "DeleteField not implemented.")
-  | Syntax.GetAttr left_ right_ field => (store, Fail "GetAttr not implemented.")
-  | Syntax.SetAttr left_ right_ field newval => (store, Fail "SetAttr not implemented.")
+  | Syntax.GetAttr attr left_ right_ => (store, Fail "GetAttr not implemented.")
+  | Syntax.SetAttr attr left_ right_ newval => eval_setattr runs store left_ right_ attr newval
   | Syntax.GetObjAttr oattr obj => (store, Fail "GetObjAttr not implemented.")
   | Syntax.SetObjAttr oattr obj attr => (store, Fail "SetObjAttr not implemented.")
   | Syntax.OwnFieldNames obj => (store, Fail "OwnFieldNames not implemented.")

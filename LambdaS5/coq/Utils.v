@@ -1,8 +1,8 @@
-Require Import Values.
 Require Import List.
 Require Import LibHeap.
-Require Import Shared.
-Module Heap := Values.Heap.
+Require Import Shared. (* jscert/coq/ *)
+Require Import LibHeap. (* jscert/tlc/ *)
+Module Heap := HeapGen (LibHeap.HeapList).
 Open Scope list_scope.
 
 Fixpoint concat_list_heap {X Y : Type} (front : list (X * Y)) (back : Heap.heap X Y) : Heap.heap X Y :=
@@ -13,6 +13,10 @@ Fixpoint concat_list_heap {X Y : Type} (front : list (X * Y)) (back : Heap.heap 
 .
 Definition concat_heaps {X Y : Type} (front back : Heap.heap X Y) :=
   concat_list_heap (Heap.to_list front) back
+.
+
+Definition heap_filter {X Y : Type} (h : Heap.heap X Y) (pred : (X*Y)->bool) : Heap.heap X Y :=
+  concat_list_heap (List.filter pred (Heap.to_list h)) Heap.empty
 .
 
 

@@ -9,7 +9,7 @@ and string_of_value depth st = function
 | Values.Null -> "null"
 | Values.Undefined -> "undefined"
 | Values.Number f -> CoqUtils.implode (JsNumber.to_string f)
-| Values.String s -> CoqUtils.implode s
+| Values.String s -> "\"" ^ (CoqUtils.implode s) ^ "\""
 | Values.True -> "true"
 | Values.False -> "false"
 | Values.Object ptr -> string_of_object_ptr depth st ptr
