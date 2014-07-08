@@ -13,7 +13,7 @@ and string_of_value depth st = function
 | Values.True -> "true"
 | Values.False -> "false"
 | Values.Object ptr -> string_of_object_ptr depth st ptr
-| Values.Closure (loc_heap, args, body) ->
+| Values.Closure (_, loc_heap, args, body) ->
     Printf.sprintf "<closure func (%s) { %s }>"
       (String.concat ", " (List.map CoqUtils.implode args))
       (string_of_expression depth body)

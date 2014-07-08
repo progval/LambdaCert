@@ -5,6 +5,7 @@ Require Import Values.
 Require Import Context.
 Require Import Monads.
 Require Import Utils.
+Require Import Operators.
 Require Import LibHeap.
 Require Import LibStream.
 Open Scope list_scope.
@@ -139,8 +140,7 @@ Definition eval_get_field runs store (left_expr right_expr attrs_expr : Syntax.e
             | Some (attributes_data_of data) => (store, Return (Values.attributes_data_value data))
             | Some (attributes_accessor_of accessor) => (store, Fail "getter not implemented.")
             | None =>
-                let (store, loc) := Store.add_value store Values.Undefined
-                in (store, Context.Return loc)
+                Context.add_value_return store Values.Undefined
             end)))))
 .
 
@@ -215,8 +215,8 @@ Definition eval_setbang runs store (name : string) (expr : Syntax.expression) : 
 * Capture the environment's name-to-location heap and return a closure. *)
 Definition eval_lambda runs store (args : list id) (body : Syntax.expression) : (Store.store * Context.result) :=
   let env := Store.loc_heap store in
-  let (store, loc) := Store.add_value store (Values.Closure env args body)
-  in (store, Return loc)
+  let (store, loc) := (Store.add_closure store env args body) in
+  (store, Context.Return loc)
 .
 
 
@@ -276,7 +276,7 @@ Definition eval_app runs store (f : Syntax.expression) (args_expr : list Syntax.
     if_return store res (fun f_loc =>
       assert_deref store f_loc (fun f =>
         match f with
-        | Values.Closure env args_names body =>
+        | Values.Closure id env args_names body =>
           let (store, res) := make_app_store runs store env args_names args_expr in
           if_return store res (fun _ =>
             eval_cont_terminate runs store body
@@ -290,12 +290,12 @@ Definition eval_app runs store (f : Syntax.expression) (args_expr : list Syntax.
 
 Definition set_property_attribute store (oprop : option Values.attributes) (attr : Syntax.property_attribute_name) (new_val : Values.value_loc) : (Store.store * (option Values.attributes) * Context.result) :=
   let (store, undef_loc) := Store.add_value store Values.Undefined in
-  let (store, true_loc) := Store.add_value store Values.True in
+  let (store, true_ret) := Context.add_value_return store Values.True in
   (* Some abbreviations: *)
   let aai := Values.attributes_accessor_intro in
   let adi := Values.attributes_data_intro in
-  let raao := (fun x => (store, Some (Values.attributes_accessor_of x), Return true_loc)) in
-  let rado := (fun x => (store, Some (Values.attributes_data_of x), Return true_loc)) in
+  let raao := (fun x => (store, Some (Values.attributes_accessor_of x), true_ret)) in
+  let rado := (fun x => (store, Some (Values.attributes_data_of x), true_ret)) in
   match oprop with
   | Some prop =>
     match attr with
@@ -333,10 +333,7 @@ Definition eval_setattr runs store left_expr right_expr attr new_val_expr :=
 
 (* Main evaluator *)
 Definition eval runs store (e : Syntax.expression) : (Store.store * (@Context.result Values.value_loc)) :=
-  let return_value := (fun v =>
-    let (store, loc) := Store.add_value store v in
-    (store, Context.Return loc)
-  ) in
+  let return_value := Context.add_value_return store in
   match e with
   | Syntax.Undefined => return_value Values.Undefined
   | Syntax.Null => return_value Values.Null
@@ -361,8 +358,18 @@ Definition eval runs store (e : Syntax.expression) : (Store.store * (@Context.re
   | Syntax.GetObjAttr oattr obj => (store, Fail "GetObjAttr not implemented.")
   | Syntax.SetObjAttr oattr obj attr => (store, Fail "SetObjAttr not implemented.")
   | Syntax.OwnFieldNames obj => (store, Fail "OwnFieldNames not implemented.")
-  | Syntax.Op1 op e => (store, Fail "Op1 not implemented.")
-  | Syntax.Op2 op e1 e2 => (store, Fail "Op2 not implemented.")
+  | Syntax.Op1 op e =>
+    if_eval_return runs store e (fun store v_loc =>
+      assert_deref store v_loc (fun v =>
+        Operators.unary op store v
+    ))
+  | Syntax.Op2 op e1 e2 =>
+    if_eval_return runs store e1 (fun store v1_loc =>
+      if_eval_return runs store e2 (fun store v2_loc =>
+        assert_deref store v1_loc (fun v1 =>
+          assert_deref store v2_loc (fun v2 =>
+            Operators.binary op store v1 v2
+    ))))
   | Syntax.Label l e => (store, Fail "Label not implemented.")
   | Syntax.Break l e => (store, Fail "Break not implemented.")
   | Syntax.TryCatch body catch => (store, Fail "TryCatch not implemented.")
@@ -377,7 +384,7 @@ Definition eval runs store (e : Syntax.expression) : (Store.store * (@Context.re
 Definition get_closure runs store (loc : Values.value_loc) : (Store.store * (@Context.result Values.value_loc)) :=
   assert_get store loc (fun v =>
     match v with
-    | Values.Closure _ _ _ => (store, Context.Return loc)
+    | Values.Closure _ _ _ _ => (store, Context.Return loc)
     | Values.Object ptr =>
       assert_get_object_from_ptr store ptr (fun obj =>
         match (Values.object_code obj) with

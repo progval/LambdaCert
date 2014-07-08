@@ -25,6 +25,7 @@ Require Import Syntax.
 (****** Basic stuff ******)
 
 Definition id := string.
+Definition closure_id := nat.
 Definition value_loc := nat.
 Definition object_ptr := nat.
 
@@ -87,6 +88,6 @@ Inductive value : Type :=
 | True
 | False
 | Object : object_ptr -> value
-| Closure : loc_heap_type -> list id -> Syntax.expression -> value
+| Closure : closure_id -> loc_heap_type -> list id -> Syntax.expression -> value (* closure_id is for making closures comparable with stx= *)
 .
 

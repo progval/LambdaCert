@@ -50,6 +50,12 @@ Definition add_object (st : store) (obj : object) : (store * value_loc) :=
     ), loc)
   end
 .
+Definition add_closure (st : store) env args body : (store * value_loc) :=
+  match st with
+  | store_intro obj_heap val_heap loc_heap (loc ::: (id ::: stream)) =>
+    (store_intro obj_heap (Heap.write val_heap loc (Closure id env args body)) loc_heap stream, loc)
+  end
+.
 Definition add_value_at_location (st : store) (loc : value_loc) (val : value) : store :=
   (* TODO: Remove the old value from the Heap (or fix LibHeap to prevent duplicates) *)
   match st with

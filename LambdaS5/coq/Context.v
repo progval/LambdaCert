@@ -65,3 +65,9 @@ Definition update_object_property {return_type : Type} store (ptr : Values.objec
     end
   )
 .
+
+
+Definition add_value_return store v :=
+  let (store, loc) := Store.add_value store v in
+  (store, Return loc)
+.
