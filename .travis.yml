@@ -1,0 +1,21 @@
+language: c
+git:
+    submodules: false
+before_install:
+    - sudo apt-get update
+    - sudo apt-get install ocaml ocaml-native-compilers camlp4-extra libcoq-ocaml ocaml-base-nox ocaml-findlib
+    - echo "yes" | sudo add-apt-repository ppa:avsm/ocaml41+opam11
+    - echo "deb http://us.archive.ubuntu.com/ubuntu/ saucy universe main" | sudo tee -a /etc/apt/sources.list
+    - sudo apt-get update
+    - sudo apt-get install opam coq coq-theories
+    - export OPAMYES=1
+    - opam init
+    - opam install xml-light bisect
+    - eval `opam config env`
+    - wget https://raw.githubusercontent.com/brownplt/LambdaS5/master/envs/es5.env
+    - ./get_deps.sh
+install:
+    - make -C LambdaS5/ native
+    - ./LambdaS5/build/eval.native es5.env -save /tmp/store.dump
+script:
+    - make -C LambdaS5/ tests

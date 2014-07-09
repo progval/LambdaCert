@@ -8,7 +8,7 @@ coq: configure
 
 copy_ljs:
 	mkdir -p build/
-	cp caml/ljs/*.ml{y,l} build/
+	cp caml/ljs/ljs_lexer.mll caml/ljs/ljs_parser.mly build/
 
 edit_ljs:
 	# You might want the following commands if you want to use the latest
@@ -22,14 +22,14 @@ edit_ljs:
 
 copy: coq caml/ copy_ljs
 	mkdir -p build/
-	cp coq/*.ml{,i} build/
+	cp coq/*.ml coq/*.mli build/
 	cp caml/*.ml build/
 
 native: copy
-	cd build/; ocamlbuild eval.native pre_eval.native
+	cd build/; ocamlbuild eval.native
 
 byte:copy
-	cd build/; ocamlbuild eval.byte pre_eval.byte -tag debug
+	cd build/; ocamlbuild eval.byte -tag debug
 
 interpreter: native
 
@@ -38,7 +38,7 @@ tests:
 
 clean:
 	make -C coq/ clean
-	rm -f coq/*.ml{i,}
+	rm -f coq/*.ml coq/*.mli
 	rm -rf build/*
 
 .PHONY: coq caml clean tests
