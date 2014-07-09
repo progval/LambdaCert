@@ -1,3 +1,4 @@
+Require Import JsNumber.
 Require Import String.
 Require Import Store.
 Require Import Monads.
@@ -40,11 +41,34 @@ Definition prim_to_str store (v : Values.value) :=
   end
 .
 
+Definition prim_to_bool store (v : Values.value) :=
+  match v with
+  | True => Context.add_value_return store True
+  | False => Context.add_value_return store False
+  | Undefined => Context.add_value_return store False
+  | Null => Context.add_value_return store False
+  | Number n => Context.add_value_return store (
+      if (decide(n = JsNumber.nan)) then
+        False
+      else if (decide(n = JsNumber.zero)) then
+        False
+      else if (decide(n = JsNumber.neg_zero)) then
+        False
+      else
+        True
+    )
+  | String "" => Context.add_value_return store False
+  | String _ => Context.add_value_return store True
+  | _ => Context.add_value_return store True
+  end
+.
+
 
 Definition unary (op : string) : (Store.store -> Values.value -> Store.store * (@Context.result Values.value_loc)) :=
   match op with
   | "typeof" => typeof
   | "prim->str" => prim_to_str
+  | "prim->bool" => prim_to_bool
   | _ => fun store _ => (store, Context.Fail ("Unary operator " ++ op ++ " not implemented."))
   end
 .
@@ -53,7 +77,7 @@ Definition unary (op : string) : (Store.store -> Values.value -> Store.store * (
 
 Definition stx_eq store v1 v2 :=
   match (v1, v2) with
-  | (String s1, String s2) => Context.add_value_return store (if (string_dec s1 s2) then True else False)
+  | (String s1, String s2) => Context.add_value_return store (if (decide(s1 = s2)) then True else False)
   | (Null, Null) => Context.add_value_return store True
   | (Undefined, Undefined) => Context.add_value_return store True
   | (True, True) => Context.add_value_return store True
