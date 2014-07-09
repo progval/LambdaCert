@@ -5,7 +5,7 @@ before_install:
     - sudo apt-get update
     - sudo apt-get install ocaml ocaml-native-compilers camlp4-extra libcoq-ocaml ocaml-base-nox ocaml-libfind
     - echo "yes" | sudo add-apt-repository ppa:avsm/ocaml41+opam11
-    - echo "deb http://us.archive.ubuntu.com/ubuntu/ universe main" | sudo tee -a /etc/apt/sources.list
+    - echo "deb http://us.archive.ubuntu.com/ubuntu/ saucy universe main" | sudo tee -a /etc/apt/sources.list
     - sudo apt-get update
     - sudo apt-get install opam coq coq-theories
     - export OPAMYES=1
