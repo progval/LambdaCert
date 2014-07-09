@@ -26,10 +26,10 @@ copy: coq caml/ copy_ljs
 	cp caml/*.ml build/
 
 native: copy
-	cd build/; ocamlbuild eval.native pre_eval.native
+	cd build/; ocamlbuild eval.native
 
 byte:copy
-	cd build/; ocamlbuild eval.byte pre_eval.byte -tag debug
+	cd build/; ocamlbuild eval.byte -tag debug
 
 interpreter: native
 
