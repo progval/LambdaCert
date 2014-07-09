@@ -11,7 +11,7 @@ copy_ljs:
 	ls caml
 	ls caml/ljs
 	mkdir -p build/
-	cp caml/ljs/*.ml{y,l} build/
+	cp caml/ljs/ljs_lexer.mll caml/ljs/ljs_parser.mly build/
 
 edit_ljs:
 	# You might want the following commands if you want to use the latest
