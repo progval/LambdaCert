@@ -7,6 +7,9 @@ coq: configure
 	make -C coq/
 
 copy_ljs:
+	ls
+	ls caml
+	ls caml/ljs
 	mkdir -p build/
 	cp caml/ljs/*.ml{y,l} build/
 
