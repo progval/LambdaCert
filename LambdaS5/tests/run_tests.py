@@ -13,7 +13,7 @@ else:
     from cStringIO import StringIO as BytesIO
 
 TEST_DIR = os.path.dirname(__file__)
-EXE = os.path.join(TEST_DIR, '..', 'build', 'run.byte')
+EXE = os.path.join(TEST_DIR, '..', 'build', 'eval.native')
 
 
 successes = []

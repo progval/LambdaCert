@@ -20,13 +20,18 @@ edit_ljs:
 	sed -i "s/Ljs_syntax/Interpreter/g" build/ljs_lexer.mll
 	sed -i "s/Prelude\.id/string/g" build/ljs_parser.mly
 
-caml: coq caml/ copy_ljs
+copy: coq caml/ copy_ljs
 	mkdir -p build/
 	cp coq/*.ml{,i} build/
 	cp caml/*.ml build/
-	cd build/; ocamlbuild eval.native pre_eval.native -tag debug
 
-interpreter: caml
+native: copy
+	cd build/; ocamlbuild eval.native pre_eval.native
+
+byte:copy
+	cd build/; ocamlbuild eval.byte pre_eval.byte -tag debug
+
+interpreter: native
 
 tests:
 	tests/run_tests.py
