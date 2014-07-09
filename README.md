@@ -25,7 +25,7 @@ The simplest example:
 You can also use stdin:
 
 ```
-echo "(func (foo, bar) { bar })('first', 'second')" | ./build/run.byte stdin
+echo "(func (foo, bar) { bar })('first', 'second')" | ./build/eval.native stdin
 ```
 
 
@@ -34,7 +34,7 @@ and all the previous ones have to be LambdaJS environment files.
 For instance:
 
 ```
-./build/run.byte ~/js/LambdaS5/envs/es5.env file.ljs
+./build/eval.native ~/js/LambdaS5/envs/es5.env file.ljs
 ```
 
 

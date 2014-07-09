@@ -24,7 +24,7 @@ caml: coq caml/ copy_ljs
 	mkdir -p build/
 	cp coq/*.ml{,i} build/
 	cp caml/*.ml build/
-	cd build/; ocamlbuild run.byte -tag debug
+	cd build/; ocamlbuild eval.native pre_eval.native -tag debug
 
 interpreter: caml
 

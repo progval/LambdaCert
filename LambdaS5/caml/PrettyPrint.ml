@@ -43,3 +43,8 @@ and string_of_expression_option depth = function
 and string_of_attr depth st = function
 | Values.Coq_attributes_data_of d -> Values.attributes_data_rect (fun v w c e -> Printf.sprintf "{#value %s, #writable %B, #configurable %B, #enumerable %B}" (string_of_value_loc depth st v) w c e) d
 | Values.Coq_attributes_accessor_of d -> Values.attributes_accessor_rect (fun g s e c -> Printf.sprintf "{#getter %s, #setter %s}" (string_of_value_loc depth st g) (string_of_value_loc depth st s)) d (* enumerable and configurable ignored *)
+
+let string_of_store depth st =
+  let locs = (Utils.Heap.to_list st.Store.loc_heap) in
+  let pred = string_of_value_loc depth st in
+  String.concat "" (List.map (fun (k, v) -> Printf.sprintf "let (%s = %s) \n" (CoqUtils.implode k) (pred v)) locs)
