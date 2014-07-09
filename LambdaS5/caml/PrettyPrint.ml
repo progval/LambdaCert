@@ -1,3 +1,5 @@
+module StringSet = Set.Make(String)
+
 let rec string_of_value_loc depth st loc =
   if (depth = 0) then
     "<cut>"
@@ -30,9 +32,21 @@ and string_of_object depth st obj =
   (string_of_value_loc depth st obj.Values.object_proto) (CoqUtils.implode obj.Values.object_class)
   (obj.Values.object_extensible) (string_of_value_loc_option depth st obj.Values.object_prim_value)
   (string_of_value_loc_option depth st obj.Values.object_code)
-  (String.concat ", " (List.map
-      (fun (name, attr) -> Printf.sprintf "'%s': %s" (CoqUtils.implode name) (string_of_attr depth st attr))
-      (Values.Heap.to_list obj.Values.object_properties_)))
+  (string_of_prop_list depth st (Values.Heap.to_list obj.Values.object_properties_))
+and string_of_prop_list depth st l =
+  let string_of_prop = function (name, attr) ->
+    Printf.sprintf "'%s': %s" (CoqUtils.implode name) (string_of_attr depth st attr)
+  in let rec string_of_prop_list_aux props skip acc =
+    match props with
+    | [] -> acc
+    | (name, value) :: tl ->
+        if StringSet.mem (CoqUtils.implode name) skip then
+          string_of_prop_list_aux tl skip acc
+        else
+          string_of_prop_list_aux tl (StringSet.add (CoqUtils.implode name) skip) (acc ^ ", " ^ (string_of_prop (name, value)))
+  in match l with
+  | [] -> ""
+  | (name, value) :: tl -> string_of_prop_list_aux tl (StringSet.singleton (CoqUtils.implode name)) (string_of_prop (name, value))
 
 and string_of_expression depth e =
   "<expr>"
