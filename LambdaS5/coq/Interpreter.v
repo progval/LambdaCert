@@ -233,12 +233,12 @@ Definition eval_arg_list runs store (args_expr : list Syntax.expression) : (Stor
   List.fold_left (eval_arg_list_aux runs) args_expr (store, Return nil)
 .
 
-Definition make_app_loc_heap (app_context lambda_context : Values.loc_heap_type) (args_name : list Values.id) (args : list Values.value_loc) : option Values.loc_heap_type :=
+Definition make_app_loc_heap (closure_env : Values.loc_heap_type) (args_name : list Values.id) (args : list Values.value_loc) : option Values.loc_heap_type :=
   match (Utils.zip_left (List.rev args_name) args) with
   | Some args_heap =>
     Some (Utils.concat_list_heap
       args_heap
-      (Utils.concat_heaps lambda_context app_context)
+      closure_env
     )
   | None => None
   end
@@ -247,12 +247,10 @@ Definition make_app_loc_heap (app_context lambda_context : Values.loc_heap_type)
 Definition make_app_store runs store (closure_env : Values.loc_heap_type) (args_name : list Values.id) (args_expr : list Syntax.expression) : (Store.store * Context.result) :=
   let (store, res) := eval_arg_list runs store args_expr in
   if_return store res (fun args =>
-    match store with Store.store_intro obj_heap val_heap loc_heap stream =>
-      match (make_app_loc_heap loc_heap closure_env args_name args) with
-      | Some new_loc_heap =>
-        (Store.store_intro obj_heap val_heap new_loc_heap stream, Context.Return 0) (* We have to return something... *)
-      | None => (store, Fail "Arity mismatch")
-      end
+    match (make_app_loc_heap closure_env args_name args) with
+    | Some new_loc_heap =>
+      (Store.replace_loc_heap store new_loc_heap, Context.Return 0) (* We have to return something... *)
+    | None => (store, Fail "Arity mismatch")
     end
   )
 .
@@ -277,10 +275,11 @@ Definition eval_app runs store (f : Syntax.expression) (args_expr : list Syntax.
       assert_deref store f_loc (fun f =>
         match f with
         | Values.Closure id env args_names body =>
-          let (store, res) := make_app_store runs store env args_names args_expr in
-          if_return store res (fun _ =>
-            eval_cont_terminate runs store body
-          )
+          let (inner_store, res) := make_app_store runs store env args_names args_expr in
+          if_return inner_store res (fun _ =>
+            eval_cont runs inner_store body (fun inner_store res =>
+              (Store.replace_loc_heap inner_store (Store.loc_heap store), res)
+          ))
         | _ => (store, Fail "Expected Closure but did not get one.")
         end
   )))

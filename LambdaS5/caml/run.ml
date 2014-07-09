@@ -28,7 +28,7 @@ let parse_es5_env cin name =
 
 
 let eval_ast ast =
-  Interpreter.runs_eval 1000 Store.create_store ast
+  Interpreter.runs_eval max_int Store.create_store ast
 
 let print_result (store, result) =
   (match result with

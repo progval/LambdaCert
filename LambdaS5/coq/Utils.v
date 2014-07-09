@@ -15,10 +15,6 @@ Definition concat_heaps {X Y : Type} (front back : Heap.heap X Y) :=
   concat_list_heap (Heap.to_list front) back
 .
 
-Definition heap_filter {X Y : Type} (h : Heap.heap X Y) (pred : (X*Y)->bool) : Heap.heap X Y :=
-  concat_list_heap (List.filter pred (Heap.to_list h)) Heap.empty
-.
-
 
 Fixpoint zip_aux {X Y : Type} (lx : list X) (ly : list Y) (acc : list (X * Y)) : option (list (X * Y)) :=
   match lx with

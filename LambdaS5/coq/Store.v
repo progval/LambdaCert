@@ -79,6 +79,12 @@ Definition update_object (st : store) (ptr : object_ptr) (new_obj : object) : st
   | store_intro obj_heap val_heap loc_heap stream => (store_intro (Heap.write obj_heap ptr new_obj) val_heap (loc_heap) stream)
   end
 .
+Definition replace_loc_heap (st : store) (new_loc_heap : loc_heap_type) : store :=
+  match st with
+  | store_intro obj_heap val_heap ç stream =>
+      store_intro obj_heap val_heap new_loc_heap stream
+  end
+.
 Definition add_option_value st (oval : option value) : (store * option Values.value_loc) :=
   match oval with
   | Some val => let (st, loc) := add_value st val in (st, Some loc)

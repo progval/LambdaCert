@@ -51,15 +51,14 @@ Definition update_object {return_type : Type} store (ptr : Values.object_ptr) (p
 * destroyed; otherwise it is updated/created with the one returned by
 * the predicate. *)
 Definition update_object_property {return_type : Type} store (ptr : Values.object_ptr) (name : Values.prop_name) (pred : option Values.attributes -> (Store.store * option Values.attributes * (@result return_type))) : (Store.store * (@result return_type)) :=
-  let key_equal_pred := (fun x => match x with (k, _) => (if (String.string_dec k name) then false else true) end) in
   update_object store ptr (fun obj =>
     match obj with (Values.object_intro prot cl ext prim props code) =>
       match (pred (Values.get_object_property obj name)) with
       | (store, Some prop, res) =>
-          let new_props := (Heap.write (Utils.heap_filter props key_equal_pred) name prop) in
+          let new_props := (Heap.write props name prop) in
           (store, Values.object_intro prot cl ext prim new_props code, res)
       | (store, None, res) =>
-          let new_props := (Utils.heap_filter props key_equal_pred) in
+          let new_props := props in
           (store, Values.object_intro prot cl ext prim new_props code, res)
       end
     end

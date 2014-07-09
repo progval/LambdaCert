@@ -71,9 +71,8 @@ Definition get_object_property (object : object) (name : prop_name) : option att
   Heap.read_option (object_properties_ object) name
 .
 Definition set_object_property (obj : object) (name : prop_name) (attrs : attributes) : object :=
-  let key_equal_pred := (fun x => match x with (k, _) => (if (String.string_dec k name) then false else true) end) in
   match obj with (object_intro p c e p' props code) =>
-    let props2 := Heap.write (Utils.heap_filter props key_equal_pred) name attrs in
+    let props2 := Heap.write props name attrs in
     object_intro p c e p' props2 code
   end
 .
