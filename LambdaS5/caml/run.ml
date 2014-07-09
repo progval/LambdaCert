@@ -27,8 +27,8 @@ let parse_es5_env cin name =
                        (Lexing.lexeme lexbuf))
 
 
-let eval_ast ast =
-  Interpreter.runs_eval max_int Store.create_store ast
+let eval_ast store ast =
+  Interpreter.runs_eval max_int store ast
 
 let print_result (store, result) =
   (match result with
