@@ -1,0 +1,2 @@
+{[] 'foo': {#getter (func (this, arg) { this }), #setter undefined}}['foo']
+

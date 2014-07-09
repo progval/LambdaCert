@@ -39,12 +39,12 @@ Definition eval_arg_list_aux runs (left : (Store.store * @Context.result (list V
 .
 
 
-Definition eval_arg_list runs store (args_expr : list Syntax.expression) : (Store.store * Context.result) :=
+Definition eval_reversed_arg_list runs store (args_expr : list Syntax.expression) : (Store.store * Context.result) :=
   List.fold_left (eval_arg_list_aux runs) args_expr (store, Return nil)
 .
 
 Definition make_app_loc_heap (closure_env : Values.loc_heap_type) (args_name : list Values.id) (args : list Values.value_loc) : option Values.loc_heap_type :=
-  match (Utils.zip_left (List.rev args_name) args) with
+  match (Utils.zip_left args_name args) with
   | Some args_heap =>
     Some (Utils.concat_list_heap
       args_heap
@@ -223,8 +223,10 @@ Definition eval_set_field runs store (left_expr right_expr new_val_expr arg_expr
                     (* Note: Setters don't get the new value. See https://github.com/brownplt/LambdaS5/issues/45 *)
                     apply runs store setter (left_loc :: (arg_loc :: nil))
                 | None => 
-                  let attrs := Values.attributes_data_of (attributes_data_intro new_val true true true) in
-                  (store, Context.Return new_val)
+                  Context.update_object_property store left_ptr name (fun prop =>
+                    let attrs := Values.attributes_data_of (attributes_data_intro new_val true true true) in
+                    (store, Some attrs, Context.Return new_val)
+                  )
                 end)))))))
 .
 
@@ -289,7 +291,7 @@ Definition eval_lambda runs store (args : list id) (body : Syntax.expression) : 
 (* TODO: fix context handling so variables are actually local. *)
 Definition eval_app runs store (f : Syntax.expression) (args_expr : list Syntax.expression) : (Store.store * Context.result) :=
   if_eval_return runs store f (fun store f_loc =>
-    let (store, res) := eval_arg_list runs store args_expr in
+    let (store, res) := eval_reversed_arg_list runs store (List.rev args_expr) in
     if_return store res (fun args =>
       apply runs store f_loc args
   ))

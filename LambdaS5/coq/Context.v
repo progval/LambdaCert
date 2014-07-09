@@ -59,6 +59,7 @@ Definition update_object_property {return_type : Type} store (ptr : Values.objec
           (store, Values.object_intro prot cl ext prim new_props code, res)
       | (store, None, res) =>
           let new_props := props in
+          (* TODO: Remove property *)
           (store, Values.object_intro prot cl ext prim new_props code, res)
       end
     end
