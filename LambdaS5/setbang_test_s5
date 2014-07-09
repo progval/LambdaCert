@@ -1,3 +1,0 @@
-echo "(let (foo = 5) let (baz = foo) (let (bar = func (n) {baz}) (foo := 7; bar))) (6)" | ../obj/s5.d.byte -load init.heap /dev/stdin -continue-s5-eval
-echo "(let (foo = 5) let (baz = foo) (let (bar = func (n) {foo}) (baz := 7; bar))) (6)" | ../obj/s5.d.byte -load init.heap /dev/stdin -continue-s5-eval
-
