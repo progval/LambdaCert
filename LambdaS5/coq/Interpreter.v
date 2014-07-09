@@ -12,7 +12,8 @@ Open Scope list_scope.
 Open Scope string_scope.
 
 (* Basic idea of how this file works:
-* There are two sections in this file:
+* There are tree sections in this file:
+* * Closures handling, for calling objects and closures.
 * * The evaluators, which actually define the semantics of LambdaJS.
 *   There is one evaluator per node constructor (defined in coq/Syntax.v),
 *   with eventually helper functions.
@@ -26,6 +27,56 @@ Open Scope string_scope.
 Implicit Type runs : Context.runs_type.
 Implicit Type store : Store.store.
 
+
+(****** Closures handling ******)
+
+(* Evaluates all arguments, passing the store from one to the next. *)
+Definition eval_arg_list_aux runs (left : (Store.store * @Context.result (list Values.value_loc))) (arg_expr : Syntax.expression) : (Store.store * @Context.result (list Values.value_loc)) :=
+  let (store, res) := left in
+  if_return store res (fun left_args =>
+    if_eval_return runs store arg_expr (fun store arg_loc =>
+      (store, Return (arg_loc :: left_args))))
+.
+
+
+Definition eval_arg_list runs store (args_expr : list Syntax.expression) : (Store.store * Context.result) :=
+  List.fold_left (eval_arg_list_aux runs) args_expr (store, Return nil)
+.
+
+Definition make_app_loc_heap (closure_env : Values.loc_heap_type) (args_name : list Values.id) (args : list Values.value_loc) : option Values.loc_heap_type :=
+  match (Utils.zip_left (List.rev args_name) args) with
+  | Some args_heap =>
+    Some (Utils.concat_list_heap
+      args_heap
+      closure_env
+    )
+  | None => None
+  end
+.
+
+Definition make_app_store runs store (closure_env : Values.loc_heap_type) (args_name : list Values.id) (args : list Values.value_loc) : (Store.store * Context.result) :=
+  match (make_app_loc_heap closure_env args_name args) with
+  | Some new_loc_heap =>
+    (Store.replace_loc_heap store new_loc_heap, Context.Return 0) (* We have to return something... *)
+  | None => (store, Fail "Arity mismatch")
+  end
+.
+
+Definition apply runs store (f_loc : Values.value_loc) (args : list Values.value_loc) : (Store.store * Context.result) :=
+  let (store, res) := ((Context.runs_type_get_closure runs) store f_loc) in
+  if_return store res (fun f_loc =>
+    assert_deref store f_loc (fun f =>
+      match f with
+      | Values.Closure id env args_names body =>
+        let (inner_store, res) := make_app_store runs store env args_names args in
+        if_return inner_store res (fun _ =>
+          eval_cont runs inner_store body (fun inner_store res =>
+            (Store.replace_loc_heap inner_store (Store.loc_heap store), res)
+        ))
+      | _ => (store, Fail "Expected Closure but did not get one.")
+      end
+  ))
+.
 
 
 (********* Evaluators ********)
@@ -122,7 +173,7 @@ Definition eval_object_decl runs store (attrs : Syntax.object_attributes) (l : l
   end
 .
 
-(* left[right, args].
+(* left[right, arg].
 * Evaluate left, then right, then the arguments.
 * Fails if left does not evaluate to a location of an object pointer.
 * Otherwise, if the `right` attribute of the object pointed to by `left`
@@ -130,21 +181,22 @@ Definition eval_object_decl runs store (attrs : Syntax.object_attributes) (l : l
 * the getter with the arguments.
 * Note the arguments are evaluated even if they are not passed to any
 * function. *)
-Definition eval_get_field runs store (left_expr right_expr attrs_expr : Syntax.expression) : (Store.store * Context.result) :=
-  if_eval_return runs store left_expr (fun store left =>
-    if_eval_return runs store right_expr (fun store right =>
-      if_eval_return runs store attrs_expr (fun store attrs =>
-        assert_get_object store left (fun object =>
-          assert_get_string store right (fun name =>
+Definition eval_get_field runs store (left_expr right_expr arg_expr : Syntax.expression) : (Store.store * Context.result) :=
+  if_eval_return runs store left_expr (fun store left_loc =>
+    if_eval_return runs store right_expr (fun store right_loc =>
+      if_eval_return runs store arg_expr (fun store arg_loc =>
+        assert_get_object store left_loc (fun object =>
+          assert_get_string store right_loc (fun name =>
             match (Values.get_object_property object name) with
             | Some (attributes_data_of data) => (store, Return (Values.attributes_data_value data))
-            | Some (attributes_accessor_of accessor) => (store, Fail "getter not implemented.")
+            | Some (attributes_accessor_of (attributes_accessor_intro getter _ _ _)) =>
+                apply runs store getter (left_loc :: (arg_loc :: nil))
             | None =>
                 Context.add_value_return store Values.Undefined
             end)))))
 .
 
-(* left[right, attrs] = new_val
+(* left[right, arg] = new_val
 * Evaluate left, then right, then the arguments, then the new_val.
 * Fails if left does not evaluate to a location of an object pointer.
 * Otherwise, if the `right` attribute of the object pointed to by `left`
@@ -153,22 +205,26 @@ Definition eval_get_field runs store (left_expr right_expr attrs_expr : Syntax.e
 * with the `new_val` prepended to the list.
 * Note the arguments are evaluated even if they are not passed to any
 * function. *)
-Definition eval_set_field runs store (left_expr right_expr new_val_expr attrs_expr : Syntax.expression) : (Store.store * Context.result) :=
+Definition eval_set_field runs store (left_expr right_expr new_val_expr arg_expr : Syntax.expression) : (Store.store * Context.result) :=
   if_eval_return runs store left_expr (fun store left_loc =>
-    if_eval_return runs store right_expr (fun store right =>
+    if_eval_return runs store right_expr (fun store right_loc =>
       if_eval_return runs store new_val_expr (fun store new_val =>
-        if_eval_return runs store attrs_expr (fun store attrs =>
-          assert_get_string store right (fun name =>
-            assert_get_object_ptr store left_loc (fun left_ptr =>
-              Context.update_object_property store left_ptr name (fun prop =>
-                match (prop) with
+        if_eval_return runs store arg_expr (fun store arg_loc =>
+          assert_get_object_ptr store left_loc (fun left_ptr =>
+            assert_get_object_from_ptr store left_ptr (fun object =>
+              assert_get_string store right_loc (fun name =>
+                match (Values.get_object_property object name) with
                 | Some (attributes_data_of (Values.attributes_data_intro _ w e c)) =>
-                  let attrs := Values.attributes_data_of (attributes_data_intro new_val w e c) in
-                  (store, Some attrs, Context.Return new_val)
-                | Some (attributes_accessor_of accessor) => (store, prop, Fail "setter not implemented.") (* TODO *)
+                  Context.update_object_property store left_ptr name (fun prop =>
+                    let attrs := Values.attributes_data_of (attributes_data_intro new_val w e c) in
+                    (store, Some attrs, Context.Return new_val)
+                  )
+                | Some (attributes_accessor_of (attributes_accessor_intro _ setter _ _)) =>
+                    (* Note: Setters don't get the new value. See https://github.com/brownplt/LambdaS5/issues/45 *)
+                    apply runs store setter (left_loc :: (arg_loc :: nil))
                 | None => 
                   let attrs := Values.attributes_data_of (attributes_data_intro new_val true true true) in
-                  (store, Some attrs, Context.Return new_val)
+                  (store, Context.Return new_val)
                 end)))))))
 .
 
@@ -219,43 +275,6 @@ Definition eval_lambda runs store (args : list id) (body : Syntax.expression) : 
   (store, Context.Return loc)
 .
 
-
-(* Evaluates all arguments, passing the store from one to the next. *)
-Definition eval_arg_list_aux runs (left : (Store.store * @Context.result (list Values.value_loc))) (arg_expr : Syntax.expression) : (Store.store * @Context.result (list Values.value_loc)) :=
-  let (store, res) := left in
-  if_return store res (fun left_args =>
-    if_eval_return runs store arg_expr (fun store arg_loc =>
-      (store, Return (arg_loc :: left_args))))
-.
-
-
-Definition eval_arg_list runs store (args_expr : list Syntax.expression) : (Store.store * Context.result) :=
-  List.fold_left (eval_arg_list_aux runs) args_expr (store, Return nil)
-.
-
-Definition make_app_loc_heap (closure_env : Values.loc_heap_type) (args_name : list Values.id) (args : list Values.value_loc) : option Values.loc_heap_type :=
-  match (Utils.zip_left (List.rev args_name) args) with
-  | Some args_heap =>
-    Some (Utils.concat_list_heap
-      args_heap
-      closure_env
-    )
-  | None => None
-  end
-.
-
-Definition make_app_store runs store (closure_env : Values.loc_heap_type) (args_name : list Values.id) (args_expr : list Syntax.expression) : (Store.store * Context.result) :=
-  let (store, res) := eval_arg_list runs store args_expr in
-  if_return store res (fun args =>
-    match (make_app_loc_heap closure_env args_name args) with
-    | Some new_loc_heap =>
-      (Store.replace_loc_heap store new_loc_heap, Context.Return 0) (* We have to return something... *)
-    | None => (store, Fail "Arity mismatch")
-    end
-  )
-.
-
-
 (* f (args)
 * If f is a closure and there are as many arguments as the arity of f,
 * call f's body with the current store, with the name-to-location map
@@ -270,19 +289,10 @@ Definition make_app_store runs store (closure_env : Values.loc_heap_type) (args_
 (* TODO: fix context handling so variables are actually local. *)
 Definition eval_app runs store (f : Syntax.expression) (args_expr : list Syntax.expression) : (Store.store * Context.result) :=
   if_eval_return runs store f (fun store f_loc =>
-    let (store, res) := ((Context.runs_type_get_closure runs) store f_loc) in
-    if_return store res (fun f_loc =>
-      assert_deref store f_loc (fun f =>
-        match f with
-        | Values.Closure id env args_names body =>
-          let (inner_store, res) := make_app_store runs store env args_names args_expr in
-          if_return inner_store res (fun _ =>
-            eval_cont runs inner_store body (fun inner_store res =>
-              (Store.replace_loc_heap inner_store (Store.loc_heap store), res)
-          ))
-        | _ => (store, Fail "Expected Closure but did not get one.")
-        end
-  )))
+    let (store, res) := eval_arg_list runs store args_expr in
+    if_return store res (fun args =>
+      apply runs store f_loc args
+  ))
 .
         
 
