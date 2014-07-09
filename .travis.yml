@@ -2,7 +2,6 @@ language: c
 git:
     submodules: false
 before_install:
-    - echo "yes" | sudo add-apt-repository ppa:avsm/ocaml41+opam11
     - sudo apt-get update
     - sudo apt-get install coq coq-theories ocaml ocaml-native-compilers camlp4-extra opam libcoq-ocaml ocaml-base-nox
     - sudo opam install ocamlfind
