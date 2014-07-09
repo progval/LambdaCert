@@ -7,8 +7,10 @@ before_install:
     - echo "yes" | sudo add-apt-repository ppa:avsm/ocaml41+opam11
     - sudo apt-get update
     - sudo apt-get install opam
-    - sudo opam init
-    - sudo opam install ocamlfind xml-light bisect
+    - export OPAMYES=1
+    - opam init
+    - opam install ocamlfind xml-light bisect
+    - eval `opam config env`
     - wget https://raw.githubusercontent.com/brownplt/LambdaS5/master/envs/es5.env
     - ./get_deps.sh
 install:
