@@ -2,8 +2,9 @@ language: c
 git:
     submodules: false
 before_install:
-    - sudo add-apt-repository ppa:avsm/ocaml41+opam11
-    - sudo add-apt-repository ppa:glondu/ppa
+    - echo "yes" | sudo add-apt-repository ppa:avsm/ocaml41+opam11
+    - echo "yes" | sudo add-apt-repository ppa:glondu/ppa
+    - sudo apt-get update -qq
     - sudo apt-get install coq ocaml
     - wget https://raw.githubusercontent.com/brownplt/LambdaS5/master/envs/es5.env
     - ./get_deps.sh
