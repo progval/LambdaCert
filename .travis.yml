@@ -2,7 +2,6 @@ language: c
 git:
     submodules: false
 before_install:
-    - echo "yes" | sudo add-apt-repository ppa:avsm/ppa
     - sudo apt-get update
     - sudo apt-get install coq coq-theories ocaml-nox opam
     - sudo opam install ocamlfind
