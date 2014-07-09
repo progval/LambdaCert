@@ -6,8 +6,8 @@ before_install:
     - sudo apt-get install aptitude
     - echo "yes" | sudo add-apt-repository ppa:avsm/ocaml41+opam11
     - echo "yes" | sudo add-apt-repository ppa:glondu/ppa
-    - sudo aptitude update -qq
-    - sudo aptitude install coq ocaml proofgeneral
+    - sudo aptitude update 
+    - sudo aptitude install -y coq ocaml proofgeneral
     - wget https://raw.githubusercontent.com/brownplt/LambdaS5/master/envs/es5.env
     - ./get_deps.sh
 install:
