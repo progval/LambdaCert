@@ -7,9 +7,6 @@ coq: configure
 	make -C coq/
 
 copy_ljs:
-	ls
-	ls caml
-	ls caml/ljs
 	mkdir -p build/
 	cp caml/ljs/ljs_lexer.mll caml/ljs/ljs_parser.mly build/
 
