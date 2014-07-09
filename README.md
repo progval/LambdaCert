@@ -37,6 +37,22 @@ For instance:
 ./build/eval.native ~/js/LambdaS5/envs/es5.env file.ljs
 ```
 
+The previous command can be very long (two minutes on my machine), because it
+has to evaluate the env file, which is rather big.
+
+A faster way, if you have to run multiple files, is to evaluate it once, and
+dump it. Thus, you only have to load the dump on each run:
+
+```
+./build/eval.native ~/js/LambdaS5/envs/es5.env -save /tmp/store.dump
+./build/eval.native -load /tmp/store.dump foo.ljs
+./build/eval.native -load /tmp/store.dump bar.ljs
+```
+
+This dump uses Caml's Marshal module, with the Closure flag (because we want
+to dump TLC's LibStream's streams), so you should load the dump with the
+exact same version of `eval.native` as the one used to save it. (You would
+get a Marshal error otherwise.)
 
 # How it works
 
