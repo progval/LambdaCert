@@ -25,7 +25,7 @@ edit_ljs:
 
 copy: coq caml/ copy_ljs
 	mkdir -p build/
-	cp coq/*.ml{,i} build/
+	cp coq/*.ml coq/*.mli build/
 	cp caml/*.ml build/
 
 native: copy
@@ -41,7 +41,7 @@ tests:
 
 clean:
 	make -C coq/ clean
-	rm -f coq/*.ml{i,}
+	rm -f coq/*.ml coq/*.mli
 	rm -rf build/*
 
 .PHONY: coq caml clean tests
