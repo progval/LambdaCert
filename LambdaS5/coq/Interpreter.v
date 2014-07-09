@@ -86,7 +86,7 @@ Definition apply runs store (f_loc : Values.value_loc) (args : list Values.value
 Definition eval_id runs store (name : string) : (Store.store * Context.result) :=
   match (Store.get_loc store name) with
   | Some v => (store, Return v)
-  | None => Context.raise_exception store "ReferenceError"
+  | None => (store, Fail "ReferenceError")
   end
 .
 
