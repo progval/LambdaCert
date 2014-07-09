@@ -54,3 +54,7 @@ for (test, msg) in skipped:
 print('\t%d failed:' % len(fails))
 for fail in fails:
     print('\t\t%s' % fail)
+if fails:
+   exit(1)
+else:
+    exit(0)
