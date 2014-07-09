@@ -2,6 +2,7 @@ language: c
 git:
     submodules: false
 before_install:
+    - sudo apt-get update
     - sudo apt-get install aptitude
     - echo "yes" | sudo add-apt-repository ppa:avsm/ocaml41+opam11
     - echo "yes" | sudo add-apt-repository ppa:glondu/ppa
