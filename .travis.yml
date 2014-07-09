@@ -4,7 +4,10 @@ git:
 before_install:
     - echo "yes" | sudo add-apt-repository ppa:avsm/ppa
     - sudo apt-get update
-    - sudo apt-get install coq coq-theories ocaml ocamlfind xml-light bisect opam
+    - sudo apt-get install coq coq-theories ocaml opam
+    - sudo opam install ocamlfind
+    - sudo opam install xml-light
+    - sudo opam install bisect 
     - wget https://raw.githubusercontent.com/brownplt/LambdaS5/master/envs/es5.env
     - ./get_deps.sh
 install:
