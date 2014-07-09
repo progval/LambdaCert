@@ -1,0 +1,9 @@
+language: c
+before_install:
+    - sudo aptitude install coq
+    - wget https://raw.githubusercontent.com/brownplt/LambdaS5/master/envs/es5.env
+install:
+    - make -C LambdaS5/ native
+    - ./LambdaS5/build/eval.native es5.env -save /tmp/store.dump
+script:
+    - make -C LambdaS5/ tests
