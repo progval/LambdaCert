@@ -332,13 +332,15 @@ Definition set_property_attribute store (oprop : option Values.attributes) (attr
     | (Value, attributes_data_of (attributes_data_intro _       true enum config)) =>
                             rado (attributes_data_intro new_val true enum config)
     (* Set #setter when #configurable is true *)
-    | (Setter,     attributes_data_of (attributes_data_intro     _      _       enum true))
-    | (Setter, attributes_accessor_of (attributes_accessor_intro _      _       enum true)) =>
+    | (Setter,     attributes_data_of (attributes_data_intro     _      _       enum true)) =>
                                  raao (attributes_accessor_intro undef  new_val enum true)
+    | (Setter, attributes_accessor_of (attributes_accessor_intro get _       enum true)) =>
+                                 raao (attributes_accessor_intro get new_val enum true)
     (* Set #getter when #configurable is true *)
-    | (Getter,     attributes_data_of (attributes_data_intro     _       _     enum true))
-    | (Getter, attributes_accessor_of (attributes_accessor_intro _       _     enum true)) =>
+    | (Getter,     attributes_data_of (attributes_data_intro     _       _     enum true)) =>
                                  raao (attributes_accessor_intro new_val undef enum true)
+    | (Getter, attributes_accessor_of (attributes_accessor_intro _       set enum true)) =>
+                                 raao (attributes_accessor_intro new_val set enum true)
     (* Set #value of accessor when #configurable is true *)
     | (Value,  attributes_accessor_of (attributes_accessor_intro _       _     enum true)) =>
                                  rado (attributes_data_intro     new_val false enum true)
