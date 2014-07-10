@@ -462,6 +462,38 @@ Definition eval_ownfieldnames runs store obj_expr : (Store.store * Context.resul
   ))
 .
 
+Definition eval_throw runs store expr : (Store.store * (@Context.result Values.value_loc)) :=
+  if_eval_return runs store expr (fun store loc =>
+    (store, Context.Exception loc)
+  )
+.
+
+Definition eval_trycatch runs store body catch : (Store.store * (@Context.result Values.value_loc)) :=
+  eval_cont runs store body (fun store res =>
+    match res with
+    | Return x => (store, Return x)
+    | Exception exc =>
+      if_eval_return runs store catch (fun store catch =>
+        apply runs store catch (exc :: nil)
+      )
+    | Fail f => (store, Fail f)
+    end
+  )
+.
+
+Definition eval_tryfinally runs store body fin : (Store.store * (@Context.result Values.value_loc)) :=
+  eval_cont runs store body (fun store res =>
+    match res with
+    | Return x => eval_cont_terminate runs store fin
+    | Exception exc =>
+      if_eval_return runs store fin (fun store catch =>
+        (store, Exception exc)
+      )
+    | Fail f => (store, Fail f)
+    end
+  )
+.
+
 (******** Closing the loop *******)
 
 (* Main evaluator *)
@@ -502,9 +534,9 @@ Definition eval runs store (e : Syntax.expression) : (Store.store * (@Context.re
     ))
   | Syntax.Label l e => (store, Fail "Label not implemented.")
   | Syntax.Break l e => (store, Fail "Break not implemented.")
-  | Syntax.TryCatch body catch => (store, Fail "TryCatch not implemented.")
-  | Syntax.TryFinally body fin => (store, Fail "TryFinally not implemented.")
-  | Syntax.Throw e => (store, Fail "Throw not implemented.")
+  | Syntax.TryCatch body catch => eval_trycatch runs store body catch
+  | Syntax.TryFinally body fin => eval_tryfinally runs store body fin
+  | Syntax.Throw e => eval_throw runs store e
   | Syntax.Eval e bindings => (store, Fail "Eval not implemented.")
   | Syntax.Hint _ e => eval_cont_terminate runs store e
   end

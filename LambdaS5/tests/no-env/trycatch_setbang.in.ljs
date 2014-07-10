@@ -1,0 +1,1 @@
+let (foo = 'old') try { foo := 'new'; throw {[]} } catch { func (bar) { foo } }

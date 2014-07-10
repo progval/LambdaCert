@@ -1,0 +1,1 @@
+try { throw {[] 'foo': {#value 'bar', #writable false}}} catch { func (exc) { exc } }

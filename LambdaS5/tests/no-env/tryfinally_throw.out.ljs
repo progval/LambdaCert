@@ -1,0 +1,3 @@
+try
+finally
+Uncaught exception: {[#proto: undefined, #class: Object, #extensible: true, #primval: <unset val>, #code: <unset val>] }

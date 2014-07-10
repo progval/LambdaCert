@@ -1,0 +1,1 @@
+try { prim('print', 'try'); throw {[]}; prim('print', 'should not be here') } finally { prim('print', 'finally'); 'bar' }

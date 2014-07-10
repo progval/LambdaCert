@@ -1,0 +1,1 @@
+let (foo = func () { let (bar = 'baz') throw {[]} }) try { foo() } catch { func (exc) { bar } }
