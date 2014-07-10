@@ -32,6 +32,7 @@ Definition if_return {value_type : Type} {value_type_2 : Type} store (var : @Con
   match var with
   | Return v => cont v
   | Exception exc => (store, Exception exc)
+  | Break b v => (store, Break b v)
   | Fail f => (store, Fail f)
   end
 .
@@ -43,6 +44,7 @@ Definition if_eval_return {value_type : Type} runs store (e : Syntax.expression)
   eval_cont runs store e (fun store res => match res with
   | Return v => cont store v
   | Exception exc => (store, Exception exc)
+  | Break b v => (store, Break b v)
   | Fail f => (store, Fail f)
   end
   )

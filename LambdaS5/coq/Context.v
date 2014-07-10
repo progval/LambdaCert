@@ -13,6 +13,7 @@ Require Import Store.
 Inductive result {value_type : Type} : Type :=
   | Return : value_type -> result (* value *)
   | Exception : Values.value_loc -> result (* exception message *)
+  | Break : string -> Values.value_loc -> result (* label, expression *)
   | Fail : string -> result (* reason *)
 .
 

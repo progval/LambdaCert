@@ -8,6 +8,7 @@ Require Import Utils.
 Require Import Operators.
 Require Import LibHeap.
 Require Import LibStream.
+Require Import JsNumber.
 Open Scope list_scope.
 Open Scope string_scope.
 
@@ -462,6 +463,27 @@ Definition eval_ownfieldnames runs store obj_expr : (Store.store * Context.resul
   ))
 .
 
+Definition eval_label runs store (label : string) body : (Store.store * (@Context.result Values.value_loc)) :=
+  eval_cont runs store body (fun store res =>
+    match res with
+    | Return ret => (store, Return ret)
+    | Exception exc => (store, Exception exc)
+    | Break b v =>
+      if (decide(b = label)) then
+        (store, Return v)
+      else
+        (store, Break b v)
+    | Fail f => (store, Fail f)
+    end
+  )
+.
+Definition eval_break runs store (label : string) body : (Store.store * (@Context.result Values.value_loc)) :=
+  if_eval_return runs store body (fun store ret =>
+    (store, Break label ret)
+  )
+.
+        
+
 Definition eval_throw runs store expr : (Store.store * (@Context.result Values.value_loc)) :=
   if_eval_return runs store expr (fun store loc =>
     (store, Context.Exception loc)
@@ -476,6 +498,7 @@ Definition eval_trycatch runs store body catch : (Store.store * (@Context.result
       if_eval_return runs store catch (fun store catch =>
         apply runs store catch (exc :: nil)
       )
+    | Break b v => (store, Break b v)
     | Fail f => (store, Fail f)
     end
   )
@@ -489,6 +512,7 @@ Definition eval_tryfinally runs store body fin : (Store.store * (@Context.result
       if_eval_return runs store fin (fun store catch =>
         (store, Exception exc)
       )
+    | Break b v => (store, Break b v)
     | Fail f => (store, Fail f)
     end
   )
@@ -532,8 +556,8 @@ Definition eval runs store (e : Syntax.expression) : (Store.store * (@Context.re
       if_eval_return runs store e2 (fun store v2_loc =>
         Operators.binary op runs store v1_loc v2_loc
     ))
-  | Syntax.Label l e => (store, Fail "Label not implemented.")
-  | Syntax.Break l e => (store, Fail "Break not implemented.")
+  | Syntax.Label l e => eval_label runs store l e
+  | Syntax.Break l e => eval_break runs store l e
   | Syntax.TryCatch body catch => eval_trycatch runs store body catch
   | Syntax.TryFinally body fin => eval_tryfinally runs store body fin
   | Syntax.Throw e => eval_throw runs store e

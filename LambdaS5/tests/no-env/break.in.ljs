@@ -1,0 +1,2 @@
+let (f = func () { break lb 'break value' })
+prim('print', (label lb: { f() }))
