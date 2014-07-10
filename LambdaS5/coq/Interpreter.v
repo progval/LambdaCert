@@ -188,13 +188,16 @@ Definition eval_get_field runs store (left_expr right_expr arg_expr : Syntax.exp
       if_eval_return runs store arg_expr (fun store arg_loc =>
         assert_get_object store left_loc (fun object =>
           assert_get_string store right_loc (fun name =>
-            match (Values.get_object_property object name) with
-            | Some (attributes_data_of data) => (store, Return (Values.attributes_data_value data))
-            | Some (attributes_accessor_of (attributes_accessor_intro getter _ _ _)) =>
-                apply runs store getter (left_loc :: (arg_loc :: nil))
-            | None =>
-                Context.add_value_return store Values.Undefined
-            end)))))
+            let (store, res) := Context.runs_type_get_property runs store (left_loc, name) in
+            if_return store res (fun ret =>
+              match ret with
+              | Some (attributes_data_of data) => (store, Return (Values.attributes_data_value data))
+              | Some (attributes_accessor_of (attributes_accessor_intro getter _ _ _)) =>
+                  apply runs store getter (left_loc :: (arg_loc :: nil))
+              | None =>
+                  Context.add_value_return store Values.Undefined
+              end
+  ))))))
 .
 
 (* left[right, arg] = new_val
