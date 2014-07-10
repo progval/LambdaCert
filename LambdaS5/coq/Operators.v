@@ -169,7 +169,7 @@ Definition prop_to_obj store v1 v2 :=
         let props := Heap.write props "enumerable" (make_attr enum_loc) in
         let props := Heap.write props "writable" (make_attr writable_loc) in
         let props := Heap.write props "value" (make_attr val) in
-        let obj := object_intro proto_loc "Object" false None props None in
+        let obj := object_intro proto_loc "Object" false None props nil None in
         let (store, loc) := Store.add_object store obj in
         (store, Return loc)
       | Some (attributes_accessor_of (attributes_accessor_intro get set enum config)) =>
@@ -180,7 +180,7 @@ Definition prop_to_obj store v1 v2 :=
         let props := Heap.write props "enumerable" (make_attr enum_loc) in
         let props := Heap.write props "setter" (make_attr set) in
         let props := Heap.write props "getter" (make_attr get) in
-        let obj := object_intro proto_loc "Object" false None props None in
+        let obj := object_intro proto_loc "Object" false None props nil None in
         let (store, loc) := Store.add_object store obj in
         (store, Return loc)
       | None => Context.add_value_return store Undefined

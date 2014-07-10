@@ -168,6 +168,7 @@ Definition eval_object_decl runs store (attrs : Syntax.object_attributes) (l : l
                 Values.object_extensible := extensible;
                 Values.object_prim_value := primval_loc;
                 Values.object_properties_ := props;
+                Values.object_deleted_properties := nil;
                 Values.object_code := code |}
             in (store, Context.Return loc)
           ))))
@@ -234,6 +235,19 @@ Definition eval_set_field runs store (left_expr right_expr new_val_expr arg_expr
                 end)))))))
 .
 
+Definition eval_deletefield runs store (left_expr right_expr : Syntax.expression) : (Store.store * Context.result) :=
+  if_eval_return runs store left_expr (fun store left_loc =>
+    if_eval_return runs store right_expr (fun store right_loc =>
+      assert_get_object_ptr store left_loc (fun left_ptr =>
+        assert_get_string store right_loc (fun name =>
+          update_object store left_ptr (fun obj =>
+            match obj with
+            | object_intro v c e p props del code =>
+              let (store, true_loc) := Store.add_value store True in
+              (store, object_intro v c e p props (name :: del) code, Return true_loc)
+            end
+  )))))
+.
 
 (* let (id = expr) body
 * Evaluate expr, set it to a fresh location in the store, and bind this
@@ -438,10 +452,18 @@ Definition make_prop_heap runs store (vals : list Values.value) : option (Store.
 Definition left_to_string {X : Type} (x : (string * X)) : Values.value :=
   let (k, v) := x in Values.String k
 .
+Definition not_deleted_pred (deleted : list prop_name) (x : (prop_name * attributes)) : bool :=
+  let (name, _) := x in
+  negb (name_in_list name deleted)
+.
 Definition eval_ownfieldnames runs store obj_expr : (Store.store * Context.result) :=
   if_eval_return runs store obj_expr (fun store obj_loc =>
     assert_get_object store obj_loc (fun obj =>
-      match (make_prop_heap runs store (List.map left_to_string (Heap.to_list (Values.object_properties_ obj)))) with
+      let props := (Heap.to_list (Values.object_properties_ obj)) in
+      let deleted := (Values.object_deleted_properties obj) in
+      let props := (List.filter (not_deleted_pred deleted) props) in
+      let props := (List.map left_to_string props) in
+      match (make_prop_heap runs store props) with
       | Some (store, props) =>
         match (Syntax.default_object_attributes) with
         | Syntax.ObjectAttributes primval_expr code_expr prototype_expr class extensible =>
@@ -456,6 +478,7 @@ Definition eval_ownfieldnames runs store obj_expr : (Store.store * Context.resul
                     Values.object_extensible := extensible;
                     Values.object_prim_value := primval_loc;
                     Values.object_properties_ := props;
+                    Values.object_deleted_properties := nil;
                     Values.object_code := code |}
                 in (store, Context.Return loc)
                 )))
@@ -539,12 +562,12 @@ Definition eval runs store (e : Syntax.expression) : (Store.store * (@Context.re
   | Syntax.ObjectDecl attrs l => eval_object_decl runs store attrs l
   | Syntax.GetField left_ right_ attributes => eval_get_field runs store left_ right_ attributes
   | Syntax.SetField left_ right_ new_val attributes => eval_set_field runs store left_ right_ new_val attributes
+  | Syntax.DeleteField left_ right_ => eval_deletefield runs store left_ right_
   | Syntax.Let id value body => eval_let runs store id value body
   | Syntax.Rec id value body => eval_rec runs store id value body
   | Syntax.SetBang id expr => eval_setbang runs store id expr
   | Syntax.Lambda args body => eval_lambda runs store args body
   | Syntax.App f args => eval_app runs store f args
-  | Syntax.DeleteField left_ right_ => (store, Fail "DeleteField not implemented.")
   | Syntax.GetAttr attr left_ right_ => (store, Fail "GetAttr not implemented.")
   | Syntax.SetAttr attr left_ right_ newval => eval_setattr runs store left_ right_ attr newval
   | Syntax.GetObjAttr oattr obj => eval_getobjattr runs store obj oattr

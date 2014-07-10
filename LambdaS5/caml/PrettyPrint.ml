@@ -32,8 +32,8 @@ and string_of_object depth st obj =
   (string_of_value_loc depth st obj.Values.object_proto) (CoqUtils.implode obj.Values.object_class)
   (obj.Values.object_extensible) (string_of_value_loc_option depth st obj.Values.object_prim_value)
   (string_of_value_loc_option depth st obj.Values.object_code)
-  (string_of_prop_list depth st (Values.Heap.to_list obj.Values.object_properties_))
-and string_of_prop_list depth st l =
+  (string_of_prop_list depth st (Values.Heap.to_list obj.Values.object_properties_) obj.Values.object_deleted_properties)
+and string_of_prop_list depth st l skip =
   let string_of_prop = function (name, attr) ->
     Printf.sprintf "'%s': %s" (CoqUtils.implode name) (string_of_attr depth st attr)
   in let rec string_of_prop_list_aux props skip acc =
@@ -46,7 +46,10 @@ and string_of_prop_list depth st l =
           string_of_prop_list_aux tl (StringSet.add (CoqUtils.implode name) skip) (acc ^ ", " ^ (string_of_prop (name, value)))
   in match l with
   | [] -> ""
-  | (name, value) :: tl -> string_of_prop_list_aux tl (StringSet.singleton (CoqUtils.implode name)) (string_of_prop (name, value))
+  | (name, value) :: tl ->
+      let skip0 = (StringSet.singleton (CoqUtils.implode name)) in
+      let skip1 = (List.fold_left (fun set elem -> StringSet.add (CoqUtils.implode elem) set) skip0 skip) in
+      string_of_prop_list_aux tl skip1 (string_of_prop (name, value))
 
 and string_of_expression depth e =
   "<expr>"
