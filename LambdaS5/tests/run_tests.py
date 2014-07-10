@@ -54,9 +54,13 @@ for (env, test) in tests:
             skipped.append((test, fd.read()))
         print('skipped.')
         continue
+    if env:
+        command = [EXE, '-load', env]
+    else:
+        command = [EXE]
     with open(in_) as in_fd:
         try:
-            output = subprocess.check_output([EXE, 'stdin'], stdin=in_fd)
+            output = subprocess.check_output(command + ['stdin'], stdin=in_fd)
         except subprocess.CalledProcessError:
             fails.append(test)
             continue

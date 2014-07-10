@@ -213,9 +213,7 @@ Set Extraction AccessOpaque.
 
 
 
-
-
-
+Extract Constant Operators._print_string => "fun x -> print_string (CoqUtils.implode x)".
 
 
 (* That would be more optimized than char lists...

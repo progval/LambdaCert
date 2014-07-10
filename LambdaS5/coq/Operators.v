@@ -34,7 +34,7 @@ Definition prim_to_str store (v : Values.value) :=
   | Undefined => Context.add_value_return store (String "undefined")
   | Null => Context.add_value_return store (String "null")
   | String s => Context.add_value_return store (String s)
-  | Number n => (store, Fail "prim_to_str not implemented for numbers.") (* TODO *)
+  | Number n => Context.add_value_return store (String (JsNumber.to_string n))
   | True => Context.add_value_return store (String "true")
   | False => Context.add_value_return store (String "false")
   | _ => (store, Fail "prim_to_str not implemented for this type.")
@@ -86,9 +86,23 @@ Definition nnot store (v : Values.value) :=
   end
 .
 
+Parameter _print_string : string -> unit.
+Definition _seq {X Y : Type} (x : X) (y : Y) : Y :=
+  y
+.
+
+Definition print store (v : Values.value) :=
+  match v with
+  | String s => _seq (_print_string s) (Context.add_value_return store Undefined)
+  | Number n => _seq (_print_string (JsNumber.to_string n)) (Context.add_value_return store Undefined)
+  | _ => (store, Fail "print of non-string and non-number.")
+  end
+.
+
 Definition unary (op : string) runs store v_loc : (Store.store * (@Context.result Values.value_loc)) :=
   assert_deref store v_loc (fun v =>
     match op with
+    | "print" => print store v
     | "typeof" => typeof store v
     | "prim->str" => prim_to_str store v
     | "prim->bool" => prim_to_bool store v
@@ -176,10 +190,18 @@ Definition prop_to_obj store v1 v2 :=
   end
 .
 
+Definition arith store (op : number -> number -> number) (v1 v2 : Values.value) : (Store.store * Context.result) :=
+  match (v1, v2) with
+  | (Number n1, Number n2) => Context.add_value_return store (Number (op n1 n2))
+  | _ => (store, Fail "Arithmetic with non-numbers.")
+  end
+.
+
 Definition binary (op : string) runs store v1_loc v2_loc : (Store.store * (@Context.result Values.value_loc)) :=
   assert_deref store v1_loc (fun v1 =>
     assert_deref store v2_loc (fun v2 =>
       match op with
+      | "+" => arith store JsNumber.add v1 v2
       | "stx=" => stx_eq store v1 v2
       | "hasProperty" => has_property runs store v1_loc v2
       | "hasOwnProperty" => has_own_property store v1 v2
