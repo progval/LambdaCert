@@ -1,0 +1,18 @@
+{let (%context = %nonstrictContext)
+     {%defineGlobalAccessors(%context,
+                             "print");
+      {let (#strict = false)
+           {let (%fun2 = %context["print" , {[#proto: null,
+                                              #class: "Object",
+                                              #extensible: true,]}])
+                {let (%ftype3 = prim("typeof", %fun2))
+                     if (prim("!", prim("stx=", %ftype3 , "function")))
+                        {%TypeError("Not a function")}
+                        else
+                        {%fun2(undefined,
+                               %mkArgsObj({[#proto: null,
+                                            #class: "Object",
+                                            #extensible: true,]
+                                           '0' : {#value ("foo") ,
+                                                  #writable true ,
+                                                  #configurable true}}))}}}}}}

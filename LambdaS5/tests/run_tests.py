@@ -4,23 +4,40 @@ import os
 import sys
 import glob
 import tempfile
+import itertools
 import subprocess
 
 # Hack to work with Python 2 and 3.
 if sys.version_info[0] >= 3:
     from io import BytesIO
+    imap = map
 else:
     from cStringIO import StringIO as BytesIO
+    imap = itertools.imap
+
+if len(sys.argv) != 2:
+    print('Syntax: %s <env dump>' % sys.argv[0])
+    exit(2)
 
 TEST_DIR = os.path.dirname(__file__)
 EXE = os.path.join(TEST_DIR, '..', 'build', 'eval.native')
+ES5_ENV = sys.argv[1]
 
+def strip_extension(filename):
+    return filename[0:-len('.in.ljs')]
+def list_ljs(dirname):
+    return glob.glob(os.path.join(TEST_DIR, dirname, '*.in.ljs'))
+def list_tests(dirname):
+    return imap(strip_extension, list_ljs(dirname))
+
+tests = itertools.chain(
+    imap(lambda x:(None, x), list_tests('no-env')),
+    imap(lambda x:(ES5_ENV, x), list_tests('with-env')))
 
 successes = []
 fails = []
 skipped = []
-for test in map(lambda x:x[0:-len('.in.ljs')],
-                glob.glob(os.path.join(TEST_DIR, '*.in.ljs'))):
+for (env, test) in tests:
     in_ = test + '.in.ljs'
     out = test + '.out.ljs'
     skip = test + '.skip'
