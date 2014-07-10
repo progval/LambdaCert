@@ -410,7 +410,57 @@ Definition eval_getobjattr runs store obj_expr oattr :=
   ))
 .
 
-      
+Definition make_prop_list_aux (fuel : nat) (left : option (nat * Store.store * object_properties)) (val : Values.value) : option (nat * Store.store * object_properties) :=
+  match left with
+  | Some (nb_entries, store, attrs) =>
+    let (store, val_loc) := Store.add_value store val in
+    let attr := Values.attributes_data_of (attributes_data_intro val_loc false false false) in
+    match (Utils.string_of_nat fuel nb_entries) with
+    | Some str_nb => Some (S nb_entries, store, Heap.write attrs str_nb attr)
+    | None => None
+    end
+  | None => None
+  end
+.
+Definition make_prop_heap runs store (vals : list Values.value) : option (Store.store * Values.object_properties) :=
+  match (List.fold_left (make_prop_list_aux (Context.runs_type_nat_fuel runs)) vals (Some (0, store, Heap.empty))) with
+  | Some (nb_entries, store, attrs) =>
+    let (store, length_loc) := Store.add_value store (Values.Number (Utils.make_number nb_entries)) in
+    let length_attr := attributes_data_of (attributes_data_intro length_loc false false false) in
+    Some (store, Heap.write attrs "length" length_attr)
+  | None => None
+  end
+.
+Definition left_to_string {X : Type} (x : (string * X)) : Values.value :=
+  let (k, v) := x in Values.String k
+.
+Definition eval_ownfieldnames runs store obj_expr : (Store.store * Context.result) :=
+  if_eval_return runs store obj_expr (fun store obj_loc =>
+    assert_get_object store obj_loc (fun obj =>
+      match (make_prop_heap runs store (List.map left_to_string (Heap.to_list (Values.object_properties_ obj)))) with
+      | Some (store, props) =>
+        match (Syntax.default_object_attributes) with
+        | Syntax.ObjectAttributes primval_expr code_expr prototype_expr class extensible =>
+          (* Following the order in the original implementation: *)
+          if_some_eval_return_else_none runs store primval_expr (fun store primval_loc =>
+            let (store, proto_default) := Store.add_value store Values.Undefined in
+            if_some_eval_else_default runs store prototype_expr proto_default (fun store prototype_loc =>
+              if_some_eval_return_else_none runs store code_expr (fun store code =>
+                let (store, loc) := Store.add_object store {|
+                    Values.object_proto := prototype_loc;
+                    Values.object_class := class;
+                    Values.object_extensible := extensible;
+                    Values.object_prim_value := primval_loc;
+                    Values.object_properties_ := props;
+                    Values.object_code := code |}
+                in (store, Context.Return loc)
+                )))
+        end
+      | None => (store, Fail "Could not convert nat to string (Coq is not Turing-complete).")
+      end
+
+  ))
+.
 
 (******** Closing the loop *******)
 
@@ -440,7 +490,7 @@ Definition eval runs store (e : Syntax.expression) : (Store.store * (@Context.re
   | Syntax.SetAttr attr left_ right_ newval => eval_setattr runs store left_ right_ attr newval
   | Syntax.GetObjAttr oattr obj => eval_getobjattr runs store obj oattr
   | Syntax.SetObjAttr oattr obj attr => (store, Fail "SetObjAttr not implemented.")
-  | Syntax.OwnFieldNames obj => (store, Fail "OwnFieldNames not implemented.")
+  | Syntax.OwnFieldNames e => eval_ownfieldnames runs store e
   | Syntax.Op1 op e =>
     if_eval_return runs store e (fun store v_loc =>
       Operators.unary op runs store v_loc
@@ -501,6 +551,7 @@ Fixpoint runs {X Y : Type} (runner : Context.runs_type -> Context.runner_type X 
   | 0 => (store, Fail "Coq is not Turing-complete")
   | S max_steps' =>
     let runners := {|
+        Context.runs_type_nat_fuel := max_steps';
         Context.runs_type_eval := runs eval max_steps';
         Context.runs_type_get_closure := runs get_closure max_steps';
         Context.runs_type_get_property := runs get_property max_steps'

@@ -63,6 +63,28 @@ Definition prim_to_bool store (v : Values.value) :=
   end
 .
 
+Definition nnot store (v : Values.value) :=
+  match v with
+  | Undefined => Context.add_value_return store True
+  | Null => Context.add_value_return store True
+  | True => Context.add_value_return store False
+  | False => Context.add_value_return store True
+  | Number d => Context.add_value_return store (
+      if (decide(d = JsNumber.zero)) then
+        True
+      else if (decide(d = JsNumber.neg_zero)) then
+        True
+      else if (decide(d <> d)) then
+        True
+      else
+        False
+    )
+  | String "" => Context.add_value_return store True
+  | String _ => Context.add_value_return store False
+  | Object _ => Context.add_value_return store False
+  | Closure _ _ _ _ => Context.add_value_return store False
+  end
+.
 
 Definition unary (op : string) runs store v_loc : (Store.store * (@Context.result Values.value_loc)) :=
   assert_deref store v_loc (fun v =>
@@ -70,6 +92,7 @@ Definition unary (op : string) runs store v_loc : (Store.store * (@Context.resul
     | "typeof" => typeof store v
     | "prim->str" => prim_to_str store v
     | "prim->bool" => prim_to_bool store v
+    | "!" => nnot store v
     | _ => (store, Context.Fail ("Unary operator " ++ op ++ " not implemented."))
     end
   )

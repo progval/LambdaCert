@@ -1,0 +1,1 @@
+(get-own-field-names({[] 'foo': {#value 'foo_value', #writable true}, 'bar': {#value 'bar_value', #writable false}}))

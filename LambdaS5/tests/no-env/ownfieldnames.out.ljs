@@ -1,0 +1,1 @@
+{[#proto: undefined, #class: Object, #extensible: true, #primval: <unset val>, #code: <unset val>] 'length': {#value 0, #writable false, #configurable false, #enumerable false}, '1': {#value "foo", #writable false, #configurable false, #enumerable false}, '0': {#value "bar", #writable false, #configurable false, #enumerable false}}
