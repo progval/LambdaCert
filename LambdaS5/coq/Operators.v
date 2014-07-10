@@ -114,6 +114,8 @@ Definition unary (op : string) runs store v_loc : (Store.store * (@Context.resul
 
 (****** Binary operators ******)
 
+Parameter _number_eq_bool : number -> number -> bool.
+
 Definition stx_eq store v1 v2 :=
   match (v1, v2) with
   | (String s1, String s2) => Context.add_value_return store (if (decide(s1 = s2)) then True else False)
@@ -121,7 +123,9 @@ Definition stx_eq store v1 v2 :=
   | (Undefined, Undefined) => Context.add_value_return store True
   | (True, True) => Context.add_value_return store True
   | (False, False) => Context.add_value_return store True
-  | (Number n1, Number n2) => (store, Fail "Number comparison not implemented.") (* TODO *)
+  | (Number n1, Number n2) =>
+    let (store, loc) := Store.add_bool store (_number_eq_bool n1 n2) in
+    (store, Return loc)
   | _ => Context.add_value_return store False
   end
 .

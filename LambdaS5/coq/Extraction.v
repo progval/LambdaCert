@@ -212,6 +212,7 @@ Set Extraction AccessOpaque.
 
 
 
+Extract Constant Operators._number_eq_bool => "(=)".
 
 Extract Constant Operators._print_string => "fun x -> print_string (CoqUtils.implode x); print_char '\n'".
 
