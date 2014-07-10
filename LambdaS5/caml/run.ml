@@ -32,7 +32,7 @@ let eval_ast store ast =
 
 let print_result (store, result) =
   (match result with
-  | Context.Return v -> print_string (PrettyPrint.string_of_value_loc 1000 store v)
+  | Context.Return v -> print_string (PrettyPrint.string_of_value_loc 5 store v)
   | Context.Exception e -> print_string "Uncaught exception: "; print_string (PrettyPrint.string_of_value_loc 5 store e)
   | Context.Fail f -> print_string "Fail: "; print_string (CoqUtils.implode f)
   );
