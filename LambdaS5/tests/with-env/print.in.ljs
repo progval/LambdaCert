@@ -13,6 +13,6 @@
                                %mkArgsObj({[#proto: null,
                                             #class: "Object",
                                             #extensible: true,]
-                                           '0' : {#value ("foo ") ,
+                                           '0' : {#value ("foo") ,
                                                   #writable true ,
                                                   #configurable true}}))}}}}}}
