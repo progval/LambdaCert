@@ -101,10 +101,47 @@ Definition has_own_property store v1 v2 :=
 .
       
 
+Definition prop_to_obj store v1 v2 :=
+  let make_attr := (fun x => attributes_data_of (attributes_data_intro x false false false)) in
+  match (v1, v2) with
+  | (Object ptr, String s) =>
+    assert_get_object_from_ptr store ptr (fun obj =>
+      match (Values.get_object_property obj s) with
+      | Some (attributes_data_of (attributes_data_intro val writ enum config)) =>
+        let (store, proto_loc) := Store.add_value store Undefined in
+        let (store, config_loc) := Store.add_bool store config in
+        let (store, enum_loc) := Store.add_bool store enum in
+        let (store, writable_loc) := Store.add_bool store writ in
+        let props := Heap.write Heap.empty "configurable" (make_attr config_loc) in
+        let props := Heap.write props "enumerable" (make_attr enum_loc) in
+        let props := Heap.write props "writable" (make_attr writable_loc) in
+        let props := Heap.write props "value" (make_attr val) in
+        let obj := object_intro proto_loc "Object" false None props None in
+        let (store, loc) := Store.add_object store obj in
+        (store, Return loc)
+      | Some (attributes_accessor_of (attributes_accessor_intro get set enum config)) =>
+        let (store, proto_loc) := Store.add_value store Undefined in
+        let (store, config_loc) := Store.add_bool store config in
+        let (store, enum_loc) := Store.add_bool store enum in
+        let props := Heap.write Heap.empty "configurable" (make_attr config_loc) in
+        let props := Heap.write props "enumerable" (make_attr enum_loc) in
+        let props := Heap.write props "setter" (make_attr set) in
+        let props := Heap.write props "getter" (make_attr get) in
+        let obj := object_intro proto_loc "Object" false None props None in
+        let (store, loc) := Store.add_object store obj in
+        (store, Return loc)
+      | None => Context.add_value_return store Undefined
+      end
+    )
+  | _ => (store, Fail "hasOwnProperty expected an object and a string.")
+  end
+.
+
 Definition binary (op : string) : (Store.store -> Values.value -> Values.value -> Store.store * (@Context.result Values.value_loc)) :=
   match op with
   | "stx=" => stx_eq 
   | "hasOwnProperty" => has_own_property
+  | "__prop->obj" => prop_to_obj (* For debugging purposes *)
   | _ => fun store _ _ => (store, Context.Fail ("Binary operator " ++ op ++ " not implemented."))
   end
 .

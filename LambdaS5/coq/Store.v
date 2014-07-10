@@ -91,6 +91,9 @@ Definition add_option_value st (oval : option value) : (store * option Values.va
   | None => (st, None)
   end
 .
+Definition add_bool st (b : bool) : (store * Values.value_loc) :=
+  add_value st (if b then Values.True else Values.False)
+.
 
 
 
