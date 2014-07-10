@@ -33,11 +33,14 @@ byte:copy
 
 interpreter: native
 
-snapshot:
+snapshot: native
 	./build/eval.native envs/es5.env -save tests/es5.dump
 
 tests: snapshot
 	tests/run_tests.py tests/es5.dump
+
+quicktests:
+	tests/run_tests.py
 
 clean:
 	make -C coq/ clean

@@ -15,13 +15,16 @@ else:
     from cStringIO import StringIO as BytesIO
     imap = itertools.imap
 
-if len(sys.argv) != 2:
+if len(sys.argv) == 2:
+    ES5_ENV = sys.argv[1]
+elif len(sys.argv) == 1:
+    ES5_ENV = None
+else:
     print('Syntax: %s <env dump>' % sys.argv[0])
     exit(2)
 
 TEST_DIR = os.path.dirname(__file__)
 EXE = os.path.join(TEST_DIR, '..', 'build', 'eval.native')
-ES5_ENV = sys.argv[1]
 
 def strip_extension(filename):
     return filename[0:-len('.in.ljs')]
@@ -30,9 +33,12 @@ def list_ljs(dirname):
 def list_tests(dirname):
     return imap(strip_extension, list_ljs(dirname))
 
-tests = itertools.chain(
-    imap(lambda x:(None, x), list_tests('no-env')),
-    imap(lambda x:(ES5_ENV, x), list_tests('with-env')))
+tests = imap(lambda x:(None, x), list_tests('no-env'))
+
+if ES5_ENV:
+    tests = itertools.chain(tests,
+        imap(lambda x:(ES5_ENV, x), list_tests('with-env')))
+
 
 successes = []
 fails = []
