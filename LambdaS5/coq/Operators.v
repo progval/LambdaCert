@@ -64,13 +64,15 @@ Definition prim_to_bool store (v : Values.value) :=
 .
 
 
-Definition unary (op : string) : (Store.store -> Values.value -> Store.store * (@Context.result Values.value_loc)) :=
-  match op with
-  | "typeof" => typeof
-  | "prim->str" => prim_to_str
-  | "prim->bool" => prim_to_bool
-  | _ => fun store _ => (store, Context.Fail ("Unary operator " ++ op ++ " not implemented."))
-  end
+Definition unary (op : string) runs store v_loc : (Store.store * (@Context.result Values.value_loc)) :=
+  assert_deref store v_loc (fun v =>
+    match op with
+    | "typeof" => typeof store v
+    | "prim->str" => prim_to_str store v
+    | "prim->bool" => prim_to_bool store v
+    | _ => (store, Context.Fail ("Unary operator " ++ op ++ " not implemented."))
+    end
+  )
 .
 
 (****** Binary operators ******)
@@ -84,6 +86,20 @@ Definition stx_eq store v1 v2 :=
   | (False, False) => Context.add_value_return store True
   | (Number n1, Number n2) => (store, Fail "Number comparison not implemented.") (* TODO *)
   | _ => Context.add_value_return store False
+  end
+.
+
+Definition has_property runs store v1_loc v2 :=
+  match v2 with
+  | String s =>
+    let (store, res) := Context.runs_type_get_property runs store (v1_loc, s) in
+    if_return store res (fun ret =>
+      match ret with
+      | Some _ => Context.add_value_return store True
+      | None => Context.add_value_return store False
+      end
+    )
+  | _ => (store, Fail "hasProperty expected a string.")
   end
 .
 
@@ -137,11 +153,15 @@ Definition prop_to_obj store v1 v2 :=
   end
 .
 
-Definition binary (op : string) : (Store.store -> Values.value -> Values.value -> Store.store * (@Context.result Values.value_loc)) :=
-  match op with
-  | "stx=" => stx_eq 
-  | "hasOwnProperty" => has_own_property
-  | "__prop->obj" => prop_to_obj (* For debugging purposes *)
-  | _ => fun store _ _ => (store, Context.Fail ("Binary operator " ++ op ++ " not implemented."))
-  end
+Definition binary (op : string) runs store v1_loc v2_loc : (Store.store * (@Context.result Values.value_loc)) :=
+  assert_deref store v1_loc (fun v1 =>
+    assert_deref store v2_loc (fun v2 =>
+      match op with
+      | "stx=" => stx_eq store v1 v2
+      | "hasProperty" => has_property runs store v1_loc v2
+      | "hasOwnProperty" => has_own_property store v1 v2
+      | "__prop->obj" => prop_to_obj store v1 v2 (* For debugging purposes *)
+      | _ => (store, Context.Fail ("Binary operator " ++ op ++ " not implemented."))
+      end
+  ))
 .

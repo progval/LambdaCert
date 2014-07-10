@@ -443,16 +443,13 @@ Definition eval runs store (e : Syntax.expression) : (Store.store * (@Context.re
   | Syntax.OwnFieldNames obj => (store, Fail "OwnFieldNames not implemented.")
   | Syntax.Op1 op e =>
     if_eval_return runs store e (fun store v_loc =>
-      assert_deref store v_loc (fun v =>
-        Operators.unary op store v
-    ))
+      Operators.unary op runs store v_loc
+    )
   | Syntax.Op2 op e1 e2 =>
     if_eval_return runs store e1 (fun store v1_loc =>
       if_eval_return runs store e2 (fun store v2_loc =>
-        assert_deref store v1_loc (fun v1 =>
-          assert_deref store v2_loc (fun v2 =>
-            Operators.binary op store v1 v2
-    ))))
+        Operators.binary op runs store v1_loc v2_loc
+    ))
   | Syntax.Label l e => (store, Fail "Label not implemented.")
   | Syntax.Break l e => (store, Fail "Break not implemented.")
   | Syntax.TryCatch body catch => (store, Fail "TryCatch not implemented.")
@@ -481,14 +478,32 @@ Definition get_closure runs store (loc : Values.value_loc) : (Store.store * (@Co
   )
 .
 
+(* Gets a property recursively. *)
+Definition get_property runs store (arg : Values.value_loc * Values.prop_name) : (Store.store * (@Context.result (option Values.attributes))) :=
+  let (loc, name) := arg in
+  assert_get store loc (fun val =>
+    match val with
+    | Object ptr =>
+      assert_get_object_from_ptr store ptr (fun obj =>
+        match (Values.get_object_property obj name, Values.object_proto obj) with
+        | (Some prop, _) => (store, Return (Some prop))
+        | (None, proto) => (Context.runs_type_get_property runs) store (proto, name)
+        end
+      )
+    | _ => (store, Return None)
+    end
+  )
+.
 
-Fixpoint runs {X : Type} (runner : Context.runs_type -> Context.runner_type X) (max_steps : nat) (store : Store.store) (e : X) : (Store.store * Context.result) :=
+
+Fixpoint runs {X Y : Type} (runner : Context.runs_type -> Context.runner_type X Y) (max_steps : nat) (store : Store.store) (e : X) : (Store.store * (@Context.result Y)) :=
   match (max_steps) with
   | 0 => (store, Fail "Coq is not Turing-complete")
   | S max_steps' =>
     let runners := {|
         Context.runs_type_eval := runs eval max_steps';
-        Context.runs_type_get_closure := runs get_closure max_steps'
+        Context.runs_type_get_closure := runs get_closure max_steps';
+        Context.runs_type_get_property := runs get_property max_steps'
         |} in
     runner runners store e
   end
@@ -496,3 +511,4 @@ Fixpoint runs {X : Type} (runner : Context.runs_type -> Context.runner_type X) (
 
 Definition runs_eval := runs eval.
 Definition runs_get_closure := runs get_closure.
+Definition runs_get_property := runs get_property.
