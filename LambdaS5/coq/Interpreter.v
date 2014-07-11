@@ -244,7 +244,7 @@ Definition eval_deletefield runs store (left_expr right_expr : Syntax.expression
             match obj with
             | object_intro v c e p props del code =>
               let (store, true_loc) := Store.add_value store True in
-              (store, object_intro v c e p props (name :: del) code, Return true_loc)
+              (store, object_intro v c e p (Heap.rem props name) del code, Return true_loc)
             end
   )))))
 .
