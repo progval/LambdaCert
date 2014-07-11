@@ -48,7 +48,7 @@ On an up-to-date system, your default package manager and OPAM (the
 OCaml package manager) should be ok:
 
 ```
-sudo aptitude install autotools git subversion ocaml ocaml-native-compilers ocaml-findlib camlp4-extra opam coq coq-theories libcoq-ocaml
+sudo aptitude install autotools git subversion ocaml ocaml-native-compilers ocaml-findlib camlp4-extra opam coq coq-theories libcoq-ocaml m4 autoconf
 OPAMYES=1 opam init
 OPAMYES=1 opam install xml-light bisect
 eval `opam config env`
@@ -60,7 +60,7 @@ always packaged as a standalone executable.
 Currently, this works on Debian testing:
 
 ```
-sudo aptitude instead libmozjs24-bin
+sudo aptitude install libmozjs-24-bin
 ```
 
 
@@ -80,6 +80,7 @@ We will use a patched version of LambdaS5 (you can see my patches
 First, get the source code (about 66MB):
 
 ```
+cd ~/js/
 git clone https://github.com/ProgVal/LambdaS5.git
 cd LambdaS5/
 git checkout working
@@ -100,6 +101,7 @@ Then, you can compile LambdaS5:
 ```
 cd ..
 make
+cd ..
 ```
 
 You now have to make LambdaS5 aware of a path where it can find SpiderMonkey.
@@ -141,6 +143,12 @@ about ten minutes to compile):
 ```
 ./get_deps.sh
 ```
+
+Note: this will checkout a subversion repository. If your ISP blocks
+the subversion protocol, you can use HTTPS instead, by replacing
+`svn checkout svn://scm.gforge.inria.fr/svn/tlc/trunk tlc` with
+`echo "yes" | svn checkout --username anonsvn --password anonsvn https://scm.gforge.inria.fr/svn/tlc/trunk tlc`
+in `jscert/Makefile` (and running `./get_deps.sh` again).
 
 Compile LambdaCert’s LambdaS5 interpreter (about two minutes):
 
