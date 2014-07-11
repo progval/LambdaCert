@@ -75,7 +75,7 @@ brew install spidermonkey
 
 We will use a patched version of LambdaS5 (you can see my patches
 [here](https://github.com/brownplt/LambdaS5/pulls/ProgVal) and
-|here](https://github.com/brownplt/LambdaS5/pulls/ProgVal?state=closed))
+[here](https://github.com/brownplt/LambdaS5/pulls/ProgVal?state=closed))
 
 First, get the source code (about 66MB):
 
@@ -86,6 +86,8 @@ git checkout working
 ```
 
 Then, compile ocamlgraph:
+
+```
 cd src/ocamlgraph-1.8.1
 autoreconf
 ./configure
