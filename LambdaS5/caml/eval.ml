@@ -18,7 +18,7 @@ let _ =
   match (dump_filename_option) with
   | None -> Run.print_result (Run.eval_ast store ast)
   | Some dump_filename ->
-    let dump_channel = open_out dump_filename in
     let (store, res) = Run.eval_ast Store.create_store ast in
+    let dump_channel = open_out dump_filename in
     Marshal.to_channel dump_channel store [Marshal.Closures];
     Run.print_result (store, res)
