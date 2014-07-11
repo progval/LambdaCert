@@ -126,7 +126,10 @@ Definition stx_eq store v1 v2 :=
   | (Number n1, Number n2) =>
     let (store, loc) := Store.add_bool store (_number_eq_bool n1 n2) in
     (store, Return loc)
+  | (Object ptr1, Object ptr2) => Context.add_value_return store (if (beq_nat ptr1 ptr2) then True else False)
+  | (Closure id1 _ _ _, Closure id2 _ _ _) => Context.add_value_return store (if (beq_nat id1 id2) then True else False)
   | _ => Context.add_value_return store False
+  (*| _ => Context.add_value_return store (if (beq_nat v1_loc v2_loc) then True else False)*)
   end
 .
 
@@ -194,6 +197,13 @@ Definition prop_to_obj store v1 v2 :=
   end
 .
 
+Definition string_plus store v1 v2 : (Store.store * Context.result) :=
+  match (v1, v2) with
+  | (String s1, String s2) => Context.add_value_return store (String (s1++s2))
+  | _ => (store, Fail "Only strings can be concatenated.")
+  end
+.
+
 Definition arith store (op : number -> number -> number) (v1 v2 : Values.value) : (Store.store * Context.result) :=
   match (v1, v2) with
   | (Number n1, Number n2) => Context.add_value_return store (Number (op n1 n2))
@@ -209,6 +219,7 @@ Definition binary (op : string) runs store v1_loc v2_loc : (Store.store * (@Cont
       | "stx=" => stx_eq store v1 v2
       | "hasProperty" => has_property runs store v1_loc v2
       | "hasOwnProperty" => has_own_property store v1 v2
+      | "string+" => string_plus store v1 v2
       | "__prop->obj" => prop_to_obj store v1 v2 (* For debugging purposes *)
       | _ => (store, Context.Fail ("Binary operator " ++ op ++ " not implemented."))
       end
