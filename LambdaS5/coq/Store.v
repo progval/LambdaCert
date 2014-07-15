@@ -1,7 +1,7 @@
 Require Import Values.
 Require Import LibStream.
 
-Module Heap := Values.Heap.
+Module Heap := HeapUtils.Heap.
 
 (* LambdaJS environment storage. *)
 

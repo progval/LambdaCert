@@ -2,7 +2,7 @@ Require Import Utils.
 Require Import String.
 Require Import JsNumber.
 Open Scope list_scope.
-Module Heap := Utils.Heap.
+Module Heap := HeapUtils.Heap.
 
 
 

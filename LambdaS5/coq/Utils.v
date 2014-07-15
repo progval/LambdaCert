@@ -1,15 +1,14 @@
 Require Import List.
 Require Import Ascii.
 Require Import String.
-Require Import LibHeap.
-Require Import Shared. (* jscert/coq/ *)
-Require Import LibHeap. (* jscert/tlc/ *)
+Require Import HeapUtils.
 Require Import JsNumber.
 Require Import Coq.Numbers.Natural.Peano.NPeano.
-Module Heap := HeapGen (LibHeap.HeapList).
 Open Scope list_scope.
 Open Scope string_scope.
 Open Scope char_scope.
+
+Module Heap := HeapUtils.Heap.
 
 Fixpoint concat_list_heap {X Y : Type} (front : list (X * Y)) (back : Heap.heap X Y) : Heap.heap X Y :=
   match front with
