@@ -7,6 +7,7 @@ Require Import Values.
 Require Import Context.
 Require Import HeapUtils.
 Require Import Interpreter.
+Require Import LibNat.
 Module Heap := Values.Heap.
 
 
@@ -104,7 +105,7 @@ Proof.
   unfold ok_loc in H.
   simpl in H.
   apply HeapUtils.write_preserves_indom.
-    apply HeapUtils.nat_comparable.
+    apply LibNat.nat_comparable.
 
     apply H.
 Qed.

@@ -2,7 +2,6 @@ Require Import Shared.
 Require Import LibHeap.
 Require Import LibTactics.
 Require Import LibReflect.
-Require Import Coq.Arith.EqNat.
 
 Module Heap := HeapGen (LibHeap.HeapList).
 
@@ -27,24 +26,4 @@ Proof.
     generalize Eq.
     apply Heap.binds_write_neq.
     apply Hv.
-Qed.
-
-
-
-Lemma nat_comparable : Comparable nat.
-Proof.
-  apply (comparable_beq beq_nat).
-  auto.
-  intros x y.
-  split.
-    intro H.
-    apply beq_nat_true.
-    apply H.
-
-    intro H.
-    assert (beq_nat x y = true).
-      apply beq_nat_true_iff.
-      apply H.
-
-      apply H0.
 Qed.
