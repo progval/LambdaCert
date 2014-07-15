@@ -1,0 +1,18 @@
+{let (%context = %nonstrictContext)
+     {%defineGlobalAccessors(%context,
+                             "TypeError");
+      {let (#strict = false)
+           %instanceof({let (%fun4 = %context["TypeError" , {[#proto: null,
+                                                              #class: "Object",
+                                                              #extensible: true,]}])
+                            {let (%ftype5 = prim("typeof", %fun4))
+                                 if (prim("!", prim("stx=", %ftype5 , "function")))
+                                    {%TypeError("Not a function")}
+                                    else
+                                    {%fun4(undefined,
+                                           %mkArgsObj({[#proto: null,
+                                                        #class: "Object",
+                                                        #extensible: true,]}))}}},
+                       %context["TypeError" , {[#proto: null,
+                                                #class: "Object",
+                                                #extensible: true,]}])}}}

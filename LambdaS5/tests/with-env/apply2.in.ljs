@@ -1,0 +1,137 @@
+{let (%context = %nonstrictContext)
+     {%defineGlobalVar(%context,
+                       "g");
+      %defineGlobalAccessors(%context,
+                             "arguments");
+      %defineGlobalAccessors(%context,
+                             "print");
+      %defineGlobalAccessors(%context,
+                             "undefined");
+      {let (#strict = false)
+           {{let (%fobj16 = {let (%prototype14 = {[#proto: %ObjectProto,
+                                                   #class: "Object",
+                                                   #extensible: true,]
+                                                  'constructor' : {#value (undefined) ,
+                                                                   #writable true ,
+                                                                   #configurable false}})
+                                 {let (%parent = %context)
+                                      {let (%thisfunc15 = {[#proto: %FunctionProto,
+                                                            #code: func
+                                                                    (%this , %args)
+                                                                   {%args
+                                                                    [delete "%new"];
+                                                                    label %ret :
+                                                                    {{let (%this = %resolveThis
+                                                                    (#strict,
+                                                                    %this))
+                                                                    {let (%context = {[#proto: %parent,
+                                                                    #class: "Object",
+                                                                    #extensible: true,]
+                                                                    'arguments' : {#value (%args) ,
+                                                                    #writable true ,
+                                                                    #configurable false}})
+                                                                    {if (%ToBoolean
+                                                                    ({let (%l-evaled10 = prim
+                                                                    ("stx=", %PropAccessorCheck
+                                                                    (%context
+                                                                    ["arguments" , {[#proto: null,
+                                                                    #class: "Object",
+                                                                    #extensible: true,]}])
+                                                                    [%ToString
+                                                                    (1.) , {[#proto: null,
+                                                                    #class: "Object",
+                                                                    #extensible: true,]}] , "argument 2"))
+                                                                    if (%ToBoolean
+                                                                    (%l-evaled10))
+                                                                    {prim
+                                                                    ("stx=", %PropAccessorCheck
+                                                                    (%this)["foo" , {[#proto: null,
+                                                                    #class: "Object",
+                                                                    #extensible: true,]}] , 34.)}
+                                                                    else
+                                                                    {%l-evaled10}}))
+                                                                    {{let (%fun12 = %context
+                                                                    ["print" , {[#proto: null,
+                                                                    #class: "Object",
+                                                                    #extensible: true,]}])
+                                                                    {let (%ftype13 = prim
+                                                                    ("typeof", %fun12))
+                                                                    if (prim
+                                                                    ("!", prim
+                                                                    ("stx=", %ftype13 , "function")))
+                                                                    {%TypeError
+                                                                    ("Not a function")}
+                                                                    else
+                                                                    {%fun12
+                                                                    (undefined,
+                                                                    %mkArgsObj
+                                                                    ({[#proto: null,
+                                                                    #class: "Object",
+                                                                    #extensible: true,]
+                                                                    '0' : {#value ("passed") ,
+                                                                    #writable true ,
+                                                                    #configurable true}}))}}}}
+                                                                    else
+                                                                    {undefined};
+                                                                    undefined}}}}},
+                                                            #class: "Function",
+                                                            #extensible: true,]
+                                                           'prototype' : {#value (%prototype14) ,
+                                                                    #writable true ,
+                                                                    #configurable true},
+                                                           'length' : {#value (0.) ,
+                                                                    #writable true ,
+                                                                    #configurable false},
+                                                           'caller' : {#getter %ThrowTypeError ,
+                                                                    #setter %ThrowTypeError},
+                                                           'arguments' : {#getter %ThrowTypeError ,
+                                                                    #setter %ThrowTypeError}})
+                                           {%prototype14["constructor" = %thisfunc15 ,
+                                                         null];
+                                            %thisfunc15}}}})
+                 %context["g" = %fobj16 ,
+                          {[#proto: null,
+                            #class: "Object",
+                            #extensible: true,]
+                           '0' : {#value (%fobj16) ,
+                                  #writable true ,
+                                  #configurable true}}]};
+            {let (%obj1 = %context["g" , {[#proto: null,
+                                           #class: "Object",
+                                           #extensible: true,]}])
+                 {let (%fun2 = %ToObject(%obj1)["apply" , {[#proto: null,
+                                                            #class: "Object",
+                                                            #extensible: true,]}])
+                      {let (%ftype3 = prim("typeof", %fun2))
+                           if (prim("!", prim("stx=", %ftype3 , "function")))
+                              {%TypeError("Not a function")}
+                              else
+                              {%fun2(%ToObject(%obj1),
+                                     %mkArgsObj({[#proto: null,
+                                                  #class: "Object",
+                                                  #extensible: true,]
+                                                 '0' : {#value ({[#proto: %ObjectProto,
+                                                                  #class: "Object",
+                                                                  #extensible: true,]
+                                                                 'foo' : {#value (34.) ,
+                                                                    #writable true ,
+                                                                    #configurable true}}) ,
+                                                        #writable true ,
+                                                        #configurable true},
+                                                 '1' : {#value ({[#proto: %ArrayProto,
+                                                                  #class: "Array",
+                                                                  #extensible: true,]
+                                                                 'length' : {#value (2.) ,
+                                                                    #writable true ,
+                                                                    #configurable false},
+                                                                 '0' : {#value (%context
+                                                                    ["undefined" , {[#proto: null,
+                                                                    #class: "Object",
+                                                                    #extensible: true,]}]) ,
+                                                                    #writable true ,
+                                                                    #configurable true},
+                                                                 '1' : {#value ("argument 2") ,
+                                                                    #writable true ,
+                                                                    #configurable true}}) ,
+                                                        #writable true ,
+                                                        #configurable true}}))}}}}}}}}
