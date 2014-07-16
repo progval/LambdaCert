@@ -427,41 +427,41 @@ Proof.
       apply store_def.
       apply st0_consistant.
 
-     intros st3 proto_loc st4 res1 st3_consistant. 
-     apply monad_iseren_preserves_all_locs_exist.
-       apply st3_consistant.
+      intros st3 proto_loc st4 res1 st3_consistant. 
+      apply monad_iseren_preserves_all_locs_exist.
+        apply st3_consistant.
 
-       intros st5 code_oloc st6 res2 st5_consistant.
-       destruct (eval_object_properties runs st5 props) as (store1, props0) eqn:store_def2.
-       apply (monad_ir_preserves_all_locs_exist object_properties).
-         apply Heap.empty.
+        intros st5 code_oloc st6 res2 st5_consistant.
+        destruct (eval_object_properties runs st5 props) as (store1, props0) eqn:store_def2.
+        apply (monad_ir_preserves_all_locs_exist object_properties).
+          apply Heap.empty.
 
-         eapply eval_object_properties_preserves_all_locs_exist.
-           apply st5_consistant.
+          eapply eval_object_properties_preserves_all_locs_exist.
+            apply st5_consistant.
 
-           apply store_def2.
+            apply store_def2.
 
-         intros res3 st7 res4.
-         destruct (add_object store1
-           {|
-           object_proto := proto_loc;
-           object_class := class;
-           object_extensible := extensible;
-           object_prim_value := primval_oloc;
-           object_properties_ := res3;
-           object_code := code_oloc |}) as (store2,obj_loc) eqn:st3_def.
-         split.
-           eapply add_object_preserves_store_consistant.
-           symmetry.
-           inversion H as [(st7_def, res4_def)].
-           rewrite <-st7_def.
-           apply st3_def.
+          intros res3 st7 res4.
+          destruct (add_object store1
+            {|
+            object_proto := proto_loc;
+            object_class := class;
+            object_extensible := extensible;
+            object_prim_value := primval_oloc;
+            object_properties_ := res3;
+            object_code := code_oloc |}) as (store2,obj_loc) eqn:st3_def.
+          split.
+            eapply add_object_preserves_store_consistant.
+            symmetry.
+            inversion H as [(st7_def, res4_def)].
+            rewrite <-st7_def.
+            apply st3_def.
 
-           inversion H as [(st7_def, res4_def)].
-           rewrite <-st7_def.
-           apply result_value_loc_exists_return.
-           eapply add_object_preserves_all_locs_exist.
-           apply st3_def.
+            inversion H as [(st7_def, res4_def)].
+            rewrite <-st7_def.
+            apply result_value_loc_exists_return.
+            eapply add_object_preserves_all_locs_exist.
+            apply st3_def.
 Qed.
 
 
