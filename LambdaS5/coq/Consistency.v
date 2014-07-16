@@ -73,15 +73,16 @@ Lemma superstore_ok_loc_option :
   ok_loc_option st oloc ->
   ok_loc_option st2 oloc
 .
-Admitted.
+Proof.
+  intros st st2 oloc H IH.
+  unfold ok_loc_option.
+  unfold ok_loc_option in IH.
+  destruct oloc.
+    apply H.
+    apply IH.
 
-Lemma superstore_all_locs_exist :
-  forall st st2,
-  superstore st st2 ->
-  all_locs_exist st ->
-  all_locs_exist st2
-.
-Admitted.
+    auto.
+Qed.
 
 (******** Consistency of Store operations ********)
 
@@ -289,10 +290,10 @@ Proof.
         inversion H.
         reflexivity.
 
-        apply superstore_all_locs_exist with st.
-        apply add_value_makes_superstore with v v0.
-        apply H_unpack.
-        apply IH.
+        eapply add_value_preserves_store_consistency.
+          apply IH.
+
+          apply H_unpack.
 
       (* Exception *)
       destruct (add_value st v) in H.
@@ -497,11 +498,9 @@ Proof.
     intros st0 primval_oloc st1 res0 superstore_st_st0 st0_consistant ok_loc_oloc0.
     destruct (add_value st0 Undefined) as (store0,proto_default) eqn:store_def.
     apply monad_iseed_preserves_all_locs_exist.
-      apply superstore_all_locs_exist with st0.
-        apply add_value_makes_superstore with Undefined proto_default.
-        apply store_def.
-
-        apply st0_consistant.
+      apply add_value_preserves_store_consistency in store_def.
+      apply store_def.
+      apply st0_consistant.
 
       intros st3 proto_loc st4 res1 superstore_store0_st3 st3_consistant ok_loc_proto_loc. 
       apply monad_iseren_preserves_all_locs_exist.
