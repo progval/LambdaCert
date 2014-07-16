@@ -30,7 +30,7 @@ Record runs_type : Type := runs_type_intro {
 (* Shortcut for instanciating and throwing an exception of the given name. *)
 Definition raise_exception store (name : string) : (Store.store * (@Context.result Values.value_loc)) :=
   let (store, proto_loc) := (Store.add_value store Values.Undefined) in
-  match (Store.add_object store (Values.object_intro proto_loc name true None Heap.empty nil None)) with
+  match (Store.add_object store (Values.object_intro proto_loc name true None Heap.empty None)) with
   | (new_st, loc) => (new_st, Exception loc)
   end
 .
@@ -55,15 +55,15 @@ Definition update_object {return_type : Type} store (ptr : Values.object_ptr) (p
 * the predicate. *)
 Definition update_object_property {return_type : Type} store (ptr : Values.object_ptr) (name : Values.prop_name) (pred : option Values.attributes -> (Store.store * option Values.attributes * (@result return_type))) : (Store.store * (@result return_type)) :=
   update_object store ptr (fun obj =>
-    match obj with (Values.object_intro prot cl ext prim props del_props code) =>
+    match obj with (Values.object_intro prot cl ext prim props code) =>
       match (pred (Values.get_object_property obj name)) with
       | (store, Some prop, res) =>
           let new_props := (Heap.write props name prop) in
-          (store, Values.object_intro prot cl ext prim new_props del_props code, res)
+          (store, Values.object_intro prot cl ext prim new_props code, res)
       | (store, None, res) =>
           let new_props := props in
           (* TODO: Remove property *)
-          (store, Values.object_intro prot cl ext prim new_props del_props code, res)
+          (store, Values.object_intro prot cl ext prim new_props code, res)
       end
     end
   )

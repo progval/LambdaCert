@@ -168,7 +168,6 @@ Definition eval_object_decl runs store (attrs : Syntax.object_attributes) (l : l
                 Values.object_extensible := extensible;
                 Values.object_prim_value := primval_loc;
                 Values.object_properties_ := props;
-                Values.object_deleted_properties := nil;
                 Values.object_code := code |}
             in (store, Context.Return loc)
           ))))
@@ -242,9 +241,9 @@ Definition eval_deletefield runs store (left_expr right_expr : Syntax.expression
         assert_get_string store right_loc (fun name =>
           update_object store left_ptr (fun obj =>
             match obj with
-            | object_intro v c e p props del code =>
+            | object_intro v c e p props code =>
               let (store, true_loc) := Store.add_value store True in
-              (store, object_intro v c e p (Heap.rem props name) del code, Return true_loc)
+              (store, object_intro v c e p (Heap.rem props name) code, Return true_loc)
             end
   )))))
 .
@@ -452,16 +451,10 @@ Definition make_prop_heap runs store (vals : list Values.value) : option (Store.
 Definition left_to_string {X : Type} (x : (string * X)) : Values.value :=
   let (k, v) := x in Values.String k
 .
-Definition not_deleted_pred (deleted : list prop_name) (x : (prop_name * attributes)) : bool :=
-  let (name, _) := x in
-  negb (name_in_list name deleted)
-.
 Definition eval_ownfieldnames runs store obj_expr : (Store.store * Context.result) :=
   if_eval_return runs store obj_expr (fun store obj_loc =>
     assert_get_object store obj_loc (fun obj =>
       let props := (Heap.to_list (Values.object_properties_ obj)) in
-      let deleted := (Values.object_deleted_properties obj) in
-      let props := (List.filter (not_deleted_pred deleted) props) in
       let props := (List.map left_to_string props) in
       match (make_prop_heap runs store props) with
       | Some (store, props) =>
@@ -478,7 +471,6 @@ Definition eval_ownfieldnames runs store obj_expr : (Store.store * Context.resul
                     Values.object_extensible := extensible;
                     Values.object_prim_value := primval_loc;
                     Values.object_properties_ := props;
-                    Values.object_deleted_properties := nil;
                     Values.object_code := code |}
                 in (store, Context.Return loc)
                 )))

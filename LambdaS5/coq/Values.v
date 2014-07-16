@@ -66,7 +66,6 @@ Record object := object_intro {
    object_extensible : bool;
    object_prim_value : option value_loc;
    object_properties_ : object_properties;
-   object_deleted_properties : list prop_name;
    object_code : option value_loc }.
 
 Fixpoint name_in_list (name : prop_name) (names : list prop_name) : bool :=
@@ -81,15 +80,12 @@ Fixpoint name_in_list (name : prop_name) (names : list prop_name) : bool :=
 .
 
 Definition get_object_property (object : object) (name : prop_name) : option attributes :=
-  if (name_in_list name (object_deleted_properties object)) then
-    None
-  else
-    Heap.read_option (object_properties_ object) name
+  Heap.read_option (object_properties_ object) name
 .
 Definition set_object_property (obj : object) (name : prop_name) (attrs : attributes) : object :=
-  match obj with (object_intro p c e p' props del_props code) =>
+  match obj with (object_intro p c e p' props code) =>
     let props2 := Heap.write props name attrs in
-    object_intro p c e p' props2 del_props code
+    object_intro p c e p' props2 code
   end
 .
 

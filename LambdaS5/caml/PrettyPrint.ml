@@ -32,7 +32,7 @@ and string_of_object depth st obj =
   (string_of_value_loc depth st obj.Values.object_proto) (CoqUtils.implode obj.Values.object_class)
   (obj.Values.object_extensible) (string_of_value_loc_option depth st obj.Values.object_prim_value)
   (string_of_value_loc_option depth st obj.Values.object_code)
-  (string_of_prop_list depth st (Values.Heap.to_list obj.Values.object_properties_) obj.Values.object_deleted_properties)
+  (string_of_prop_list depth st (Values.Heap.to_list obj.Values.object_properties_) [])
 and string_of_prop_list depth st l skip =
   let string_of_prop = function (name, attr) ->
     Printf.sprintf "'%s': %s" (CoqUtils.implode name) (string_of_attr depth st attr)

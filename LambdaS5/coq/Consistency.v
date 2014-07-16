@@ -25,10 +25,21 @@ Definition ok_loc_option st loc_option :=
   end
 .
 
-Definition all_locs_exist (st : Store.store) : Prop :=
+Definition all_locs_in_loc_heap_exist (st : Store.store) : Prop :=
   forall (i : Values.id) l,
   Heap.binds (Store.loc_heap st) i l ->
   ok_loc st l
+.
+
+(* TODO: Check props too *)
+Definition all_locs_in_obj_heap_exist (st : Store.store) : Prop :=
+  forall (ptr : Values.object_ptr) value_loc class extensible primval_opt_loc props code_opt_loc,
+  Heap.binds (Store.object_heap st) ptr (Values.object_intro value_loc class extensible primval_opt_loc props code_opt_loc) ->
+  ok_loc st value_loc /\ ok_loc_option st primval_opt_loc /\ ok_loc_option st code_opt_loc
+.
+
+Definition all_locs_exist (st : Store.store) : Prop :=
+  (all_locs_in_loc_heap_exist st) /\ (all_locs_in_obj_heap_exist st)
 .
 
 Inductive result_value_loc_exists {value_type : Type} (ok : Store.store -> value_type -> Prop) (st : store) : (@Context.result value_type) -> Prop :=
@@ -86,6 +97,40 @@ Proof.
       apply I.
 Qed.
 
+Lemma value_write_preserves_obj_heap_consistency :
+  forall (st st2 : Store.store) (loc : Values.value_loc) (v : Values.value),
+  all_locs_in_obj_heap_exist st ->
+  Store.add_value st v = (st2, loc) ->
+  all_locs_in_obj_heap_exist st
+.
+Admitted.
+
+Definition value_write_elimination {X : Type} (pred : Store.store -> X -> Prop) :=
+  forall obj_heap val_heap loc_heap fresh_locs value_loc v_loc v,
+  pred
+  {|
+  object_heap := obj_heap;
+  value_heap := val_heap;
+  Store.loc_heap := loc_heap;
+  fresh_locations := fresh_locs |} value_loc ->
+  pred
+  {|
+  object_heap := obj_heap;
+  value_heap := Store.Heap.write val_heap v_loc v;
+  Store.loc_heap := loc_heap;
+  fresh_locations := fresh_locs |} value_loc
+.
+
+Lemma value_write_elimination_ok_loc :
+  value_write_elimination ok_loc
+.
+Admitted.
+
+Lemma value_write_elimination_ok_loc_option :
+  value_write_elimination ok_loc_option
+.
+Admitted.
+
 
 Lemma add_value_preserves_store_consistency :
   forall (st st2 : Store.store) (v : Values.value) loc,
@@ -99,29 +144,60 @@ Proof.
   destruct st.
   destruct fresh_locations.
   unfold all_locs_exist.
-  simpl.
-  intros name l H.
-  unfold ok_loc.
-  unfold add_value in st2_decl.
-  inversion st2_decl as [(st2_def,loc_def)].
-  simpl.
-  tests l_eq_n: (l=n).
-    rewrite Heap.indom_equiv_binds.
-    exists v.
-    rewrite loc_def.
-    apply Heap.binds_write_eq.
+  split.
+    (* All locs in loc_heap exist. *)
+    unfold all_locs_in_loc_heap_exist.
+    intros name l H.
+    unfold ok_loc.
+    unfold add_value in st2_decl.
+    inversion st2_decl as [(st2_def,loc_def)].
+    simpl.
+    tests l_eq_n: (l=n).
+      rewrite Heap.indom_equiv_binds.
+      exists v.
+      rewrite loc_def.
+      apply Heap.binds_write_eq.
 
-    unfold all_locs_exist in IH.
-    simpl in IH.
-    unfold ok_loc in IH.
-    simpl in IH.
-    apply HeapUtils.write_preserves_indom.
-      apply LibNat.nat_comparable.
+      unfold all_locs_exist in IH.
+      simpl in IH.
+      unfold ok_loc in IH.
+      simpl in IH.
+      apply HeapUtils.write_preserves_indom.
+        apply LibNat.nat_comparable.
 
-      rewrite <-st2_def in H.
-      simpl in H.
-      eapply IH.
+        rewrite <-st2_def in H.
+        simpl in H.
+        unfold all_locs_in_loc_heap_exist in IH.
+        unfold ok_loc in IH.
+        simpl in IH.
+        destruct IH as (IH_val,IH_obj).
+        eapply IH_val.
+        apply H.
+
+    (* All locs as object attributes exist *)
+    destruct IH as (IH_val,IH_obj).
+    inversion st2_decl as [(st2_def, loc_def)].
+    unfold all_locs_in_obj_heap_exist.
+    simpl.
+    unfold all_locs_in_obj_heap_exist in IH_obj.
+    simpl in IH_obj.
+    intros ptr value_loc class extensible primval_opt_loc props code_opt_loc H.
+    (* We have to destruct the conjonction in IH_obj and the one
+    * in the goal, and make them match clause by clause. *)
+    edestruct IH_obj as (IH_obj_prot, IH_obj_2).
       apply H.
+
+      edestruct IH_obj_2 as (IH_obj_primval, IH_obj_code).
+        split.
+          apply value_write_elimination_ok_loc.
+          apply IH_obj_prot.
+
+          split.
+            apply value_write_elimination_ok_loc_option.
+            apply IH_obj_primval.
+
+            apply value_write_elimination_ok_loc_option.
+            apply IH_obj_code.
 Qed.
 
 Lemma add_value_returns_existing_value_loc :
@@ -302,8 +378,10 @@ Proof.
       inversion H as [(st2_def,res_def)].
       apply result_value_loc_exists_return.
       unfold all_locs_exist in IH.
+      destruct IH as (IH_val,IH_obj).
+      unfold all_locs_in_loc_heap_exist in IH_val.
       rewrite <-st2_def.
-      apply (IH name).
+      apply (IH_val name).
       rewrite Heap.binds_equiv_read_option.
       unfold get_loc in l_def.
       apply l_def.
@@ -371,7 +449,6 @@ Proof.
            object_extensible := extensible;
            object_prim_value := primval_oloc;
            object_properties_ := res3;
-           object_deleted_properties := nil;
            object_code := code_oloc |}) as (store2,obj_loc) eqn:st3_def.
          split.
            eapply add_object_preserves_store_consistant.
