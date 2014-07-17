@@ -526,10 +526,34 @@ Qed.
 Lemma add_object_preserves_all_locs_exist :
   forall st st2 obj loc,
   all_locs_exist st ->
+  object_locs_exist st obj ->
   Store.add_object st obj = (st2, loc) ->
   all_locs_exist st2 /\ ok_loc st2 loc
 .
-Admitted.
+Proof.
+  intros st st2 obj loc IH obj_consistant st2_decl.
+  split.
+    apply add_object_preserves_store_consistant with st obj loc.
+      apply IH.
+
+      apply obj_consistant.
+
+      apply st2_decl.
+
+    unfold add_object in st2_decl.
+    destruct st.
+    destruct fresh_locations.
+    destruct fresh_locations.
+    inversion st2_decl as [(st2_def,loc_def)].
+    unfold ok_loc.
+    simpl.
+    rewrite Heap.indom_equiv_binds.
+    exists (Object n0).
+    apply Heap.binds_write_eq.
+Qed.
+
+
+
 
 (******** Consistency of monads ********)
 
@@ -707,7 +731,50 @@ Proof.
             object_prim_value := primval_oloc;
             object_properties_ := res3;
             object_code := code_oloc |}) as (store2,obj_loc) eqn:st3_def.
+          assert (obj_consistant: object_locs_exist store1 {|
+          object_proto := proto_loc;
+          object_class := class;
+          object_extensible := extensible;
+          object_prim_value := primval_oloc;
+          object_properties_ := res3;
+          object_code := code_oloc |}).
+
+            unfold object_locs_exist.
+            intros proto_loc0 class0 extensible0 primval_opt_loc props1 code_opt_loc H0.
+            inversion H0 as [(proto_eq,class_eq,ext_eq,primval_eq,props_eq,code_eq)].
+            clear H0.
+            rewrite <-proto_eq, <-primval_eq, <-code_eq.
+            split.
+              apply eval_object_properties_preserves_ok_loc with runs st5 props props0.
+                apply superstore_st3_st5.
+                apply ok_loc_proto_loc.
+              apply store_def2.
+
+              split.
+                apply eval_object_properties_preserves_ok_loc_option with runs st5 props props0.
+                apply superstore_ok_loc_option with st3.
+                  apply superstore_st3_st5.
+
+                  apply superstore_ok_loc_option with store0.
+                    apply superstore_store0_st3.
+
+                    assert (superstore_st0_store0: superstore st0 store0).
+                      apply add_value_makes_superstore with Undefined proto_default.
+                      apply store_def.
+
+                    apply superstore_ok_loc_option with st0.
+                    apply superstore_st0_store0.
+                    apply ok_loc_oloc0.
+
+            apply store_def2.
+
+            apply eval_object_properties_preserves_ok_loc_option with runs st5 props props0.
+              apply ok_loc_code_oloc.
+
+              apply store_def2.
+
           split.
+
             eapply add_object_preserves_store_consistant with (obj := {|
             object_proto := proto_loc;
             object_class := class;
@@ -717,6 +784,8 @@ Proof.
             object_code := code_oloc |}).
               edestruct add_object_preserves_all_locs_exist as (store2_consistant,obj_loc_in_store2).
                 apply store1_consistant.
+
+                apply obj_consistant.
 
                 apply st3_def.
 
@@ -731,40 +800,7 @@ Proof.
 
                   apply store1_cstt_obj.
 
-              unfold object_locs_exist.
-              intros.
-              inversion H0 as [(proto_eq,class_eq,ext_eq,primval_eq,props_eq,code_eq)].
-              clear H0.
-              rewrite <-proto_eq, <-primval_eq, <-code_eq.
-              split.
-                apply eval_object_properties_preserves_ok_loc with runs st5 props props0.
-                  apply superstore_st3_st5.
-                  apply ok_loc_proto_loc.
-                apply store_def2.
-
-                split.
-                  apply eval_object_properties_preserves_ok_loc_option with runs st5 props props0.
-                  apply superstore_ok_loc_option with st3.
-                    apply superstore_st3_st5.
-
-                    apply superstore_ok_loc_option with store0.
-                      apply superstore_store0_st3.
-
-                      assert (superstore_st0_store0: superstore st0 store0).
-                        apply add_value_makes_superstore with Undefined proto_default.
-                        apply store_def.
-
-                      apply superstore_ok_loc_option with st0.
-                      apply superstore_st0_store0.
-                      apply ok_loc_oloc0.
-
-              apply store_def2.
-
-              apply eval_object_properties_preserves_ok_loc_option with runs st5 props props0.
-                apply ok_loc_code_oloc.
-
-                apply store_def2.
-
+            apply obj_consistant.
             inversion H as [(st7_def, res4_def)].
             rewrite <-st7_def.
             apply st3_def.
@@ -775,6 +811,8 @@ Proof.
           apply result_value_loc_exists_return.
           eapply add_object_preserves_all_locs_exist.
             apply store1_consistant.
+
+            apply obj_consistant.
 
             apply st3_def.
 Qed.
