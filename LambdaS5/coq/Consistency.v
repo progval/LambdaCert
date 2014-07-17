@@ -18,6 +18,9 @@ Module Heap := Values.Heap.
 Definition ok_loc st loc :=
   Heap.indom (Store.value_heap st) loc
 .
+Definition ignore_loc {X : Type} (st : Store.store) (something : X) :=
+  Logic.True
+.
 Definition ok_loc_option st loc_option :=
   match loc_option with
   | Some loc => ok_loc st loc
@@ -61,6 +64,27 @@ Inductive result_value_loc_exists {value_type : Type} (ok : Store.store -> value
       result_value_loc_exists ok st (Fail s)
 .
 
+Lemma result_value_loc_exists_change_ok_exception :
+  forall X Y st v ok1 ok2,
+  result_value_loc_exists ok1 st (@Exception X v) ->
+  result_value_loc_exists ok2 st (@Exception Y v)
+.
+Admitted.
+
+Lemma result_value_loc_exists_change_ok_break :
+  forall X Y st v ok1 ok2 b c,
+  result_value_loc_exists ok1 st (@Break X b v) ->
+  result_value_loc_exists ok2 st (@Break Y c v)
+.
+Admitted.
+
+Definition runs_type_eval_preserves_all_locs_exist runs :=
+  forall st e st2 res,
+  runs_type_eval runs st e = (st2, res) ->
+  all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
+.
+
+
 (* st2 is a superset of st. *)
 Definition superstore (st st2 : Store.store) :=
   forall loc, ok_loc st loc -> ok_loc st2 loc
@@ -88,7 +112,15 @@ Lemma fresh_loc_preserves_ok_loc :
   ok_loc (store_intro obj_heap val_heap loc_heap (LibStream.stream_intro n fresh_locs)) loc ->
   ok_loc (store_intro obj_heap val_heap loc_heap fresh_locs) loc
 .
-Admitted.
+Proof.
+  intros obj_heap val_heap loc_heap fresh_locs loc n IH.
+  unfold ok_loc.
+  unfold ok_loc in IH.
+  simpl.
+  simpl in IH.
+  apply IH.
+Qed.
+
 
 (******** Consistency of Store operations ********)
 
@@ -559,35 +591,92 @@ Qed.
 
 Lemma monad_ec_preserves_all_locs_exist :
   forall runs st st2 e (cont : Store.store -> Context.result -> (Store.store * Context.result)) res2,
+  runs_type_eval_preserves_all_locs_exist runs -> 
   all_locs_exist st ->
-  (forall st0 res0, let (st1, res) := cont st0 res0 in
+  (forall st0 res0 st1 res,
+    all_locs_exist st0 /\ result_value_loc_exists ok_loc st0 res0 ->
+    cont st0 res0 = (st1, res) ->
     all_locs_exist st1 /\ result_value_loc_exists ok_loc st1 res) ->
   Monads.eval_cont runs st e cont = (st2, res2) ->
   all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res2
 .
-Admitted.
+Proof.
+  intros runs st st2 e cont res2 runs_cstt IH cont_consistant st2_decl.
+  unfold Monads.eval_cont in st2_decl.
+  destruct (runs_type_eval runs st e) eqn:st_decl.
+  apply cont_consistant with s r.
+    unfold runs_type_eval_preserves_all_locs_exist in runs_cstt.
+    eapply runs_cstt.
+    apply st_decl.
+
+    apply st2_decl.
+Qed.
 
 Lemma monad_ect_preserves_all_locs_exist :
   forall runs st st2 e res2,
+  runs_type_eval_preserves_all_locs_exist runs -> 
   all_locs_exist st ->
   Monads.eval_cont_terminate runs st e = (st2, res2) ->
   all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res2
 .
-Admitted.
+Proof.
+  intros runs st st2 e res2 runs_cstt IH st2_decl.
+  unfold Monads.eval_cont_terminate in st2_decl.
+  apply monad_ec_preserves_all_locs_exist with runs st e (fun (store : store) (res : result) => (store, res)).
+    apply runs_cstt.
+
+    apply IH.
+
+    intros st0 res0 st1 res H eq.
+    inversion eq.
+    congruence.
+
+    apply st2_decl.
+Qed.
 
 Lemma monad_ir_preserves_all_locs_exist (X : Type) :
   forall st st2 (var : X) res (cont : X -> (Store.store * (@Context.result Values.value_loc))) res2,
   all_locs_exist st ->
+  result_value_loc_exists ignore_loc st res -> (*
+  (forall exc, res = Exception exc -> ok_loc st exc) ->
+  (forall b v, res = Break b v -> ok_loc st v) -> *)
   (forall res0 st1 res,
     cont res0 = (st1, res) ->
     all_locs_exist st1 /\ result_value_loc_exists ok_loc st1 res) ->
   Monads.if_return st res cont = (st2, res2) ->
   all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res2
 .
-Admitted.
+Proof.
+  intros st st2 var res cont res2 IH H_res H st2_decl.
+  unfold Monads.if_return in st2_decl.
+  destruct res eqn:res_def; inversion st2_decl as [(st2_def, res2_def)].
+    apply H with x.
+    apply st2_decl.
+
+    rewrite <-st2_def.
+    split.
+      apply IH.
+
+      eapply result_value_loc_exists_change_ok_exception.
+      apply H_res.
+
+    rewrite <-st2_def.
+    split.
+      apply IH.
+
+      eapply result_value_loc_exists_change_ok_break.
+      apply H_res.
+
+    rewrite <-st2_def.
+    split.
+      apply IH.
+
+      apply result_value_loc_exists_fail.
+Qed.
 
 Lemma monad_iseren_preserves_all_locs_exist :
   forall runs st st2 opt (cont : Store.store -> option Values.value_loc -> (Store.store * Context.result)) res2,
+  runs_type_eval_preserves_all_locs_exist runs-> 
   all_locs_exist st ->
   (forall st0 oloc0 st1 res,
     superstore st st0 ->
@@ -602,6 +691,7 @@ Admitted.
 
 Lemma monad_iseed_preserves_all_locs_exist :
   forall runs st st2 opt default (cont : Store.store -> Values.value_loc -> (Store.store * Context.result)) res2,
+  runs_type_eval_preserves_all_locs_exist runs -> 
   all_locs_exist st ->
   (forall st0 loc0 st1 res,
     superstore st st0 ->
@@ -618,12 +708,13 @@ Admitted.
 
 Lemma eval_id_preserves_all_locs_exist :
   forall runs st name st2 res,
+  runs_type_eval_preserves_all_locs_exist runs -> 
   all_locs_exist st ->
   Interpreter.eval_id runs st name = (st2, res) ->
   all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
 .
 Proof.
-  intros runs st name st2 res IH.
+  intros runs st name st2 res runs_cstt IH.
   unfold eval_id.
   destruct (get_loc st name) as [l|l] eqn: l_def.
     (* If the name exists *)
@@ -677,33 +768,40 @@ Lemma eval_object_properties_preserves_all_locs_exist :
   forall runs st st2 props props2,
   all_locs_exist st ->
   eval_object_properties runs st props = (st2, props2) ->
-  all_locs_exist st2
+  all_locs_exist st2 /\ result_value_loc_exists ignore_loc st2 props2
 .
 Admitted.
 
 (* TODO: We will have to prove the added locations exist too… *)
 Lemma eval_objectdecl_preserves_all_locs_exist :
   forall runs st st2 attrs props res,
+  runs_type_eval_preserves_all_locs_exist runs -> 
   all_locs_exist st ->
   Interpreter.eval_object_decl runs st attrs props = (st2, res) ->
   all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
 .
 Proof.
-  intros runs st st2 attrs props res IH.
+  intros runs st st2 attrs props res runs_cstt IH.
   unfold eval_object_decl.
   destruct attrs as (primval_opt_expr,value_opt_expr,prototype_opt_expr,class,extensible).
   apply monad_iseren_preserves_all_locs_exist.
+    apply runs_cstt.
+
     apply IH.
 
     intros st0 primval_oloc st1 res0 superstore_st_st0 st0_consistant ok_loc_oloc0.
     destruct (add_value st0 Undefined) as (store0,proto_default) eqn:store_def.
     apply monad_iseed_preserves_all_locs_exist.
+      apply runs_cstt.
+
       apply add_value_preserves_store_consistency in store_def.
       apply store_def.
       apply st0_consistant.
 
       intros st3 proto_loc st4 res1 superstore_store0_st3 st3_consistant ok_loc_proto_loc. 
       apply monad_iseren_preserves_all_locs_exist.
+        apply runs_cstt.
+
         apply st3_consistant.
 
         intros st5 code_oloc st6 res2 superstore_st3_st5 st5_consistant ok_loc_code_oloc.
@@ -713,6 +811,12 @@ Proof.
             apply st5_consistant.
 
             apply store_def2.
+        assert (props0_consistant: result_value_loc_exists ignore_loc store1 props0).
+          apply eval_object_properties_preserves_all_locs_exist with runs st5 props.
+            apply st5_consistant.
+
+            apply store_def2.
+          
 
         apply (monad_ir_preserves_all_locs_exist object_properties).
           apply Heap.empty.
@@ -721,6 +825,8 @@ Proof.
             apply st5_consistant.
 
             apply store_def2.
+
+          apply props0_consistant.
 
           intros res3 st7 res4.
           destruct (add_object store1
@@ -794,13 +900,10 @@ Proof.
 
                   apply store_def2.
 
-                unfold all_locs_exist.
-                split.
-                  apply store1_cstt_val.
-
-                  apply store1_cstt_obj.
+                apply store1_consistant.
 
             apply obj_consistant.
+
             inversion H as [(st7_def, res4_def)].
             rewrite <-st7_def.
             apply st3_def.
@@ -823,6 +926,7 @@ Qed.
 Theorem eval_preserves_all_locs_exist :
   forall runs (st st2 : Store.store) res,
   forall st (e : Syntax.expression),
+  runs_type_eval_preserves_all_locs_exist runs ->
   all_locs_exist st ->
   Interpreter.eval runs st e = (st2, res) ->
   all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
@@ -831,10 +935,10 @@ Proof.
   intros runs st st2 res st0 e IH H.
   destruct e; unfold eval; simpl;
     (* Null, Undefined, String, Number, True, False. *)
-    try solve [applys* add_value_return_preserves_all_locs_exist].
+    try solve [apply add_value_return_preserves_all_locs_exist; apply H].
 
     (* Id *)
-    applys* eval_id_preserves_all_locs_exist.
+    applys* eval_id_preserves_all_locs_exist. 
 
     (* ObjectDecl *)
     applys* eval_objectdecl_preserves_all_locs_exist.
