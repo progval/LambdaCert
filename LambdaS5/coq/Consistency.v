@@ -591,7 +591,7 @@ Qed.
 
 Lemma monad_ec_preserves_all_locs_exist :
   forall runs st st2 e (cont : Store.store -> Context.result -> (Store.store * Context.result)) res2,
-  runs_type_eval_preserves_all_locs_exist runs -> 
+  runs_type_eval_preserves_all_locs_exist runs ->
   all_locs_exist st ->
   (forall st0 res0 st1 res,
     all_locs_exist st0 /\ result_value_loc_exists ok_loc st0 res0 ->
@@ -614,7 +614,7 @@ Qed.
 
 Lemma monad_ect_preserves_all_locs_exist :
   forall runs st st2 e res2,
-  runs_type_eval_preserves_all_locs_exist runs -> 
+  runs_type_eval_preserves_all_locs_exist runs ->
   all_locs_exist st ->
   Monads.eval_cont_terminate runs st e = (st2, res2) ->
   all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res2
@@ -676,7 +676,7 @@ Qed.
 
 Lemma monad_iseren_preserves_all_locs_exist :
   forall runs st st2 opt (cont : Store.store -> option Values.value_loc -> (Store.store * Context.result)) res2,
-  runs_type_eval_preserves_all_locs_exist runs-> 
+  runs_type_eval_preserves_all_locs_exist runs->
   all_locs_exist st ->
   (forall st0 oloc0 st1 res,
     superstore st st0 ->
@@ -691,7 +691,7 @@ Admitted.
 
 Lemma monad_iseed_preserves_all_locs_exist :
   forall runs st st2 opt default (cont : Store.store -> Values.value_loc -> (Store.store * Context.result)) res2,
-  runs_type_eval_preserves_all_locs_exist runs -> 
+  runs_type_eval_preserves_all_locs_exist runs ->
   all_locs_exist st ->
   (forall st0 loc0 st1 res,
     superstore st st0 ->
@@ -708,7 +708,7 @@ Admitted.
 
 Lemma eval_id_preserves_all_locs_exist :
   forall runs st name st2 res,
-  runs_type_eval_preserves_all_locs_exist runs -> 
+  runs_type_eval_preserves_all_locs_exist runs ->
   all_locs_exist st ->
   Interpreter.eval_id runs st name = (st2, res) ->
   all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
@@ -775,7 +775,7 @@ Admitted.
 (* TODO: We will have to prove the added locations exist too… *)
 Lemma eval_objectdecl_preserves_all_locs_exist :
   forall runs st st2 attrs props res,
-  runs_type_eval_preserves_all_locs_exist runs -> 
+  runs_type_eval_preserves_all_locs_exist runs ->
   all_locs_exist st ->
   Interpreter.eval_object_decl runs st attrs props = (st2, res) ->
   all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
@@ -798,7 +798,7 @@ Proof.
       apply store_def.
       apply st0_consistant.
 
-      intros st3 proto_loc st4 res1 superstore_store0_st3 st3_consistant ok_loc_proto_loc. 
+      intros st3 proto_loc st4 res1 superstore_store0_st3 st3_consistant ok_loc_proto_loc.
       apply monad_iseren_preserves_all_locs_exist.
         apply runs_cstt.
 
@@ -816,7 +816,7 @@ Proof.
             apply st5_consistant.
 
             apply store_def2.
-          
+
 
         apply (monad_ir_preserves_all_locs_exist object_properties).
           apply Heap.empty.
@@ -938,7 +938,7 @@ Proof.
     try solve [apply add_value_return_preserves_all_locs_exist; apply H].
 
     (* Id *)
-    applys* eval_id_preserves_all_locs_exist. 
+    applys* eval_id_preserves_all_locs_exist.
 
     (* ObjectDecl *)
     applys* eval_objectdecl_preserves_all_locs_exist.
