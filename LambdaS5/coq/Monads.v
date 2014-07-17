@@ -41,12 +41,8 @@ Definition if_return {value_type : Type} {value_type_2 : Type} store (var : @Con
 * the evaluation returned a value.
 * Returns the store and the variable verbatim otherwise. *)
 Definition if_eval_return {value_type : Type} runs store (e : Syntax.expression) (cont : Store.store -> Values.value_loc -> (Store.store * (@Context.result value_type))) : (Store.store * (@Context.result value_type)) :=
-  eval_cont runs store e (fun store res => match res with
-  | Return v => cont store v
-  | Exception exc => (store, Exception exc)
-  | Break b v => (store, Break b v)
-  | Fail f => (store, Fail f)
-  end
+  eval_cont runs store e (fun store res =>
+    if_return store res (cont store)
   )
 .
 
