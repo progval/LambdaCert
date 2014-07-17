@@ -111,20 +111,20 @@ Proof.
 
           apply in_dom.
 
-        unfold all_locs_exist in IH.
-        rewrite Heap.indom_equiv_binds in in_dom.
-        destruct in_dom as (x, x_in_dom).
-        assert (x_in_dom_dup: Heap.binds (loc_heap st) name x).
-          apply x_in_dom.
+      unfold all_locs_exist in IH.
+      rewrite Heap.indom_equiv_binds in in_dom.
+      destruct in_dom as (x, x_in_dom).
+      assert (x_in_dom_dup: Heap.binds (loc_heap st) name x).
+        apply x_in_dom.
 
-          apply IH in x_in_dom_dup.
-          specialize (binds_equiv_read_name x).
-          assert (read_equals_x: Heap.read (loc_heap st) name = x).
-            apply binds_equiv_read_name.
-            apply x_in_dom.
+      apply IH in x_in_dom_dup.
+      specialize (binds_equiv_read_name x).
+      assert (read_equals_x: Heap.read (loc_heap st) name = x).
+        apply binds_equiv_read_name.
+        apply x_in_dom.
 
-            rewrite <-read_equals_x in x_in_dom_dup.
-            apply x_in_dom_dup.
+      rewrite <-read_equals_x in x_in_dom_dup.
+      apply x_in_dom_dup.
 
       (* If the name has not been found *)
       unfold ok_loc_option.
@@ -331,10 +331,10 @@ Proof.
         inversion H.
         reflexivity.
 
-        eapply add_value_preserves_store_consistency.
-          apply IH.
+      eapply add_value_preserves_store_consistency.
+        apply IH.
 
-          apply H_unpack.
+        apply H_unpack.
 
       (* Exception *)
       destruct (add_value st v) in H.
@@ -359,10 +359,10 @@ Proof.
         inversion H.
         reflexivity.
 
-        eapply add_value_returns_existing_value_loc.
-          apply IH.
+      eapply add_value_returns_existing_value_loc.
+        apply IH.
 
-          apply H_unpack.
+        apply H_unpack.
 
       (* Exception *)
       unfold add_value_return in H.
@@ -418,113 +418,114 @@ Proof.
   assert (st2_decl_copy: add_object st obj0 = (st2, loc0)).
     apply st2_decl.
 
-    unfold add_object in st2_decl.
-    destruct st eqn:st_def.
-    rewrite <-st_def in st2_decl_copy.
-    apply add_object_makes_superstore in st2_decl_copy.
-    assert(superstore_st_st2: superstore st st2). (* For later *)
-      apply st2_decl_copy.
+  unfold add_object in st2_decl.
+  destruct st eqn:st_def.
+  rewrite <-st_def in st2_decl_copy.
+  apply add_object_makes_superstore in st2_decl_copy.
+  assert(superstore_st_st2: superstore st st2). (* For later *)
+    apply st2_decl_copy.
 
-      rewrite <-st_def in IH_val.
-      rewrite <-st_def in IH_obj.
-      rewrite <-st_def in obj0_consistant.
-      destruct fresh_locations.
-      destruct fresh_locations.
+  rewrite <-st_def in IH_val.
+  rewrite <-st_def in IH_obj.
+  rewrite <-st_def in obj0_consistant.
+  destruct fresh_locations.
+  destruct fresh_locations.
+  split.
+    (* We add a value in the values heap without changing the locations heap,
+    * so all_locs_in_loc_heap_exist remains true. *)
+    unfold all_locs_in_loc_heap_exist.
+    intros name loc.
+    assert (loc_heap_unchanged:
+    Heap.binds (Store.loc_heap st2) name loc =
+    Heap.binds (Store.loc_heap st) name loc).
+      inversion st2_decl as [(st2_def, loc0_def)].
+      rewrite st_def.
+      simpl.
+      reflexivity.
+
+    rewrite loc_heap_unchanged.
+    intro binds_name_loc.
+    apply st2_decl_copy.
+    unfold all_locs_in_loc_heap_exist in IH_val.
+    apply IH_val with name.
+    apply binds_name_loc.
+
+    (* The values used as the object's attributes are supposed to exist,
+    * so adding the object preserves all_locs_in_obj_heap_exist. *)
+    unfold all_locs_in_obj_heap_exist.
+    intros ptr obj obj_in_heap.
+    unfold superstore in st2_decl_copy.
+    unfold all_locs_in_obj_heap_exist in IH_obj.
+    unfold object_locs_exist in obj0_consistant.
+    unfold object_locs_exist.
+    intros proto_loc class extensible primval_opt_loc props code obj_eq_obj.
+    destruct obj.
+    inversion obj_eq_obj as [(proto_eq,class_eq,ext_eq,primval_eq,props_eq,code_eq)].
+    assert (obj_consistant: ok_loc st object_proto /\
+    ok_loc_option st object_prim_value /\ ok_loc_option st object_code).
+      tests obj0_eq_obj: (obj0 = {|
+             object_proto := proto_loc;
+             object_class := class;
+             object_extensible := extensible;
+             object_prim_value := primval_opt_loc;
+             object_properties_ := props;
+             object_code := code |}).
+      apply obj0_consistant with object_class object_extensible object_properties_.
+      symmetry.
+      apply obj_eq_obj.
+
+    assert (obj_in_st: Heap.binds (Store.object_heap st) ptr {|
+            object_proto := proto_loc;
+            object_class := class;
+            object_extensible := extensible;
+            object_prim_value := primval_opt_loc;
+            object_properties_ := props;
+            object_code := code |}).
+      inversion st2_decl as [(st2_def, loc0_def)].
+      clear st2_decl.
+      rewrite st_def.
+      simpl.
+      rewrite <-obj_eq_obj.
+      rewrite <-st2_def in obj_in_heap.
+      simpl in obj_in_heap.
+      apply HeapUtils.binds_write_inv_val_neq with n0 obj0.
+        apply obj_in_heap.
+
+        congruence. (* uses obj0_eq_obj *)
+
+      unfold object_locs_exist in IH_obj.
+      eapply IH_obj.
+        apply obj_in_st.
+
+        rewrite proto_eq.
+        rewrite primval_eq.
+        rewrite code_eq.
+        reflexivity.
+
+    destruct obj_consistant as (ok_loc_proto, obj_consistant2).
+    destruct obj_consistant2 as (ok_loc_primval, ok_loc_code).
+    split.
+      apply superstore_st_st2.
+      rewrite <-proto_eq.
+      apply ok_loc_proto.
+
       split.
-        (* We add a value in the values heap without changing the locations heap,
-        * so all_locs_in_loc_heap_exist remains true. *)
-        unfold all_locs_in_loc_heap_exist.
-        intros name loc.
-        assert (loc_heap_unchanged:
-        Heap.binds (Store.loc_heap st2) name loc =
-        Heap.binds (Store.loc_heap st) name loc).
-          inversion st2_decl as [(st2_def, loc0_def)].
-          rewrite st_def.
-          simpl.
-          reflexivity.
+        eapply superstore_ok_loc_option in superstore_st_st2.
+          apply superstore_st_st2.
 
-          rewrite loc_heap_unchanged.
-          intro binds_name_loc.
-          apply st2_decl_copy.
-          unfold all_locs_in_loc_heap_exist in IH_val.
-          apply IH_val with name.
-          apply binds_name_loc.
+          rewrite <-primval_eq.
+          apply ok_loc_primval.
 
-        (* The values used as the object's attributes are supposed to exist,
-        * so adding the object preserves all_locs_in_obj_heap_exist. *)
-        unfold all_locs_in_obj_heap_exist.
-        intros ptr obj obj_in_heap.
-        unfold superstore in st2_decl_copy.
-        unfold all_locs_in_obj_heap_exist in IH_obj.
-        unfold object_locs_exist in obj0_consistant.
-        unfold object_locs_exist.
-        intros proto_loc class extensible primval_opt_loc props code obj_eq_obj.
-        destruct obj.
-        inversion obj_eq_obj as [(proto_eq,class_eq,ext_eq,primval_eq,props_eq,code_eq)].
-        assert (obj_consistant: ok_loc st object_proto /\
-        ok_loc_option st object_prim_value /\ ok_loc_option st object_code).
-          tests obj0_eq_obj: (obj0 = {|
-                 object_proto := proto_loc;
-                 object_class := class;
-                 object_extensible := extensible;
-                 object_prim_value := primval_opt_loc;
-                 object_properties_ := props;
-                 object_code := code |}).
-          apply obj0_consistant with object_class object_extensible object_properties_.
-          symmetry.
-          apply obj_eq_obj.
+        eapply superstore_ok_loc_option in superstore_st_st2.
+          apply superstore_st_st2.
 
-          assert (obj_in_st: Heap.binds (Store.object_heap st) ptr {|
-                  object_proto := proto_loc;
-                  object_class := class;
-                  object_extensible := extensible;
-                  object_prim_value := primval_opt_loc;
-                  object_properties_ := props;
-                  object_code := code |}).
-            inversion st2_decl as [(st2_def, loc0_def)].
-            clear st2_decl.
-            rewrite st_def.
-            simpl.
-            rewrite <-obj_eq_obj.
-            rewrite <-st2_def in obj_in_heap.
-            simpl in obj_in_heap.
-            apply HeapUtils.binds_write_inv_val_neq with n0 obj0.
-              apply obj_in_heap.
-
-              congruence. (* uses obj0_eq_obj *)
-
-            unfold object_locs_exist in IH_obj.
-            eapply IH_obj.
-              apply obj_in_st.
-
-              rewrite proto_eq.
-              rewrite primval_eq.
-              rewrite code_eq.
-              reflexivity.
-
-          destruct obj_consistant as (ok_loc_proto, obj_consistant2).
-          destruct obj_consistant2 as (ok_loc_primval, ok_loc_code).
-          split.
-            apply superstore_st_st2.
-            rewrite <-proto_eq.
-            apply ok_loc_proto.
-
-            split.
-              eapply superstore_ok_loc_option in superstore_st_st2.
-                apply superstore_st_st2.
-
-                rewrite <-primval_eq.
-                apply ok_loc_primval.
-
-              eapply superstore_ok_loc_option in superstore_st_st2.
-                apply superstore_st_st2.
-
-                rewrite <-code_eq.
-                apply ok_loc_code.
+          rewrite <-code_eq.
+          apply ok_loc_code.
 Qed.
 
 Lemma add_object_preserves_all_locs_exist :
   forall st st2 obj loc,
+  all_locs_exist st ->
   Store.add_object st obj = (st2, loc) ->
   all_locs_exist st2 /\ ok_loc st2 loc
 .
@@ -683,6 +684,12 @@ Proof.
 
         intros st5 code_oloc st6 res2 superstore_st3_st5 st5_consistant ok_loc_code_oloc.
         destruct (eval_object_properties runs st5 props) as (store1, props0) eqn:store_def2.
+        assert (store1_consistant: all_locs_exist store1).
+          eapply eval_object_properties_preserves_all_locs_exist with (st:=st5).
+            apply st5_consistant.
+
+            apply store_def2.
+
         apply (monad_ir_preserves_all_locs_exist object_properties).
           apply Heap.empty.
 
@@ -709,6 +716,8 @@ Proof.
             object_properties_ := res3;
             object_code := code_oloc |}).
               edestruct add_object_preserves_all_locs_exist as (store2_consistant,obj_loc_in_store2).
+                apply store1_consistant.
+
                 apply st3_def.
 
                 edestruct eval_object_properties_preserves_all_locs_exist as (store1_cstt_val,store1_cstt_obj).
@@ -765,7 +774,9 @@ Proof.
           rewrite <-st7_def.
           apply result_value_loc_exists_return.
           eapply add_object_preserves_all_locs_exist.
-          apply st3_def.
+            apply store1_consistant.
+
+            apply st3_def.
 Qed.
 
 
