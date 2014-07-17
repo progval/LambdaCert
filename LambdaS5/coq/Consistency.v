@@ -32,10 +32,15 @@ Definition all_locs_in_loc_heap_exist (st : Store.store) : Prop :=
 .
 
 (* TODO: Check props too *)
+Definition object_locs_exist (st : Store.store) (obj : Values.object) :=
+  forall proto_loc class extensible primval_opt_loc props code_opt_loc,
+  obj = object_intro proto_loc class extensible primval_opt_loc props code_opt_loc ->
+  ok_loc st proto_loc /\ ok_loc_option st primval_opt_loc /\ ok_loc_option st code_opt_loc
+.
 Definition all_locs_in_obj_heap_exist (st : Store.store) : Prop :=
-  forall (ptr : Values.object_ptr) value_loc class extensible primval_opt_loc props code_opt_loc,
-  Heap.binds (Store.object_heap st) ptr (Values.object_intro value_loc class extensible primval_opt_loc props code_opt_loc) ->
-  ok_loc st value_loc /\ ok_loc_option st primval_opt_loc /\ ok_loc_option st code_opt_loc
+  forall (ptr : Values.object_ptr) obj,
+  Heap.binds (Store.object_heap st) ptr obj ->
+  object_locs_exist st obj
 .
 
 Definition all_locs_exist (st : Store.store) : Prop :=
@@ -54,12 +59,6 @@ Inductive result_value_loc_exists {value_type : Type} (ok : Store.store -> value
       result_value_loc_exists ok st (Break b l)
   | result_value_loc_exists_fail : forall (s : string),
       result_value_loc_exists ok st (Fail s)
-.
-
-Definition object_locs_exist (st : Store.store) (obj : Values.object) :=
-  forall proto_loc class extensible primval_opt_loc props code_opt_loc,
-  obj = object_intro proto_loc class extensible primval_opt_loc props code_opt_loc ->
-  ok_loc st proto_loc /\ ok_loc_option st primval_opt_loc /\ ok_loc_option st code_opt_loc
 .
 
 (* st2 is a superset of st. *)
@@ -83,6 +82,13 @@ Proof.
 
     auto.
 Qed.
+
+Lemma fresh_loc_preserves_ok_loc :
+  forall obj_heap val_heap loc_heap fresh_locs loc n,
+  ok_loc (store_intro obj_heap val_heap loc_heap (LibStream.stream_intro n fresh_locs)) loc ->
+  ok_loc (store_intro obj_heap val_heap loc_heap fresh_locs) loc
+.
+Admitted.
 
 (******** Consistency of Store operations ********)
 
@@ -225,23 +231,43 @@ Proof.
     simpl.
     unfold all_locs_in_obj_heap_exist in IH_obj.
     simpl in IH_obj.
-    intros ptr value_loc class extensible primval_opt_loc props code_opt_loc H.
+    intros ptr obj H.
+    unfold object_locs_exist in IH_obj.
+    destruct obj.
     (* We have to destruct the conjonction in IH_obj and the one
     * in the goal, and make them match clause by clause. *)
-    edestruct IH_obj as (IH_obj_prot, IH_obj_2).
+    destruct (IH_obj ptr) with {|
+    object_proto := object_proto;
+    object_class := object_class;
+    object_extensible := object_extensible;
+    object_prim_value := object_prim_value;
+    object_properties_ := object_properties_;
+    object_code := object_code |}
+    object_proto object_class object_extensible object_prim_value object_properties_ object_code  as (IH_obj_prot, IH_obj_2).
       apply H.
 
-      edestruct IH_obj_2 as (IH_obj_primval, IH_obj_code).
+      reflexivity.
+
+      destruct IH_obj_2 as (IH_obj_primval, IH_obj_code).
+      unfold object_locs_exist.
+      (* Formalities to “unpack” the object. *)
+      intros proto_loc class extensible primval_opt_loc props code_opt_loc eq.
+      inversion eq as [(proto_eq,class_eq,ext_eq,primval_eq,props_eq,code_eq)].
+      rewrite <-proto_eq.
+      rewrite <-primval_eq.
+      rewrite <-code_eq.
+      (* Finally, we can apply IH_obj's parts. *)
+      split.
+        apply value_write_elimination_ok_loc.
+        apply fresh_loc_preserves_ok_loc with n.
+        apply IH_obj_prot.
+
         split.
-          apply value_write_elimination_ok_loc.
-          apply IH_obj_prot.
+          apply value_write_elimination_ok_loc_option.
+          apply IH_obj_primval.
 
-          split.
-            apply value_write_elimination_ok_loc_option.
-            apply IH_obj_primval.
-
-            apply value_write_elimination_ok_loc_option.
-            apply IH_obj_code.
+          apply value_write_elimination_ok_loc_option.
+          apply IH_obj_code.
 Qed.
 
 Lemma add_value_returns_existing_value_loc :
@@ -269,7 +295,22 @@ Lemma add_value_makes_superstore :
   add_value st v = (st2, loc) ->
   superstore st st2
 .
-Admitted.
+Proof.
+  intros st st2 v loc H.
+  unfold superstore.
+  intros loc0 IH.
+  unfold add_value in H.
+  destruct st eqn:st_exp.
+  destruct fresh_locations in H.
+  inversion H as [(st2_def, loc_def)].
+  clear H.
+  unfold ok_loc.
+  apply HeapUtils.write_preserves_indom.
+    apply LibNat.nat_comparable.
+
+    unfold ok_loc in IH.
+    apply IH.
+Qed.
 
 Lemma add_value_return_preserves_all_locs_exist :
   forall (st st2: Store.store) res (v : Values.value),
@@ -339,14 +380,148 @@ Proof.
       inversion H.
 Qed.
 
+Lemma add_object_makes_superstore :
+  forall st st2 obj loc,
+  add_object st obj = (st2, loc) ->
+  superstore st st2
+.
+Proof.
+  intros st st2 obj loc st2_decl.
+  unfold add_object in st2_decl.
+  destruct st eqn:st_def.
+  destruct fresh_locations.
+  destruct fresh_locations.
+  inversion st2_decl as [(st2_def,loc_def)].
+  destruct st2_decl as (st2_def,loc_def) eqn:foo.
+  unfold superstore.
+  unfold ok_loc.
+  simpl.
+  intros loc0 IH.
+  apply HeapUtils.write_preserves_indom.
+    apply LibNat.nat_comparable.
+
+    apply IH.
+Qed.
+
 Lemma add_object_preserves_store_consistant :
   forall st st2 obj loc,
   all_locs_exist st ->
   object_locs_exist st obj ->
-  (st2, loc) = Store.add_object st obj ->
+  Store.add_object st obj = (st2, loc)->
   all_locs_exist st2
 .
-Admitted.
+Proof.
+  intros st st2 obj0 loc0 IH obj0_consistant st2_decl.
+  unfold all_locs_exist.
+  unfold all_locs_exist in IH.
+  destruct IH as (IH_val,IH_obj).
+  assert (st2_decl_copy: add_object st obj0 = (st2, loc0)).
+    apply st2_decl.
+
+    unfold add_object in st2_decl.
+    destruct st eqn:st_def.
+    rewrite <-st_def in st2_decl_copy.
+    apply add_object_makes_superstore in st2_decl_copy.
+    assert(superstore_st_st2: superstore st st2). (* For later *)
+      apply st2_decl_copy.
+
+      rewrite <-st_def in IH_val.
+      rewrite <-st_def in IH_obj.
+      rewrite <-st_def in obj0_consistant.
+      destruct fresh_locations.
+      destruct fresh_locations.
+      split.
+        (* We add a value in the values heap without changing the locations heap,
+        * so all_locs_in_loc_heap_exist remains true. *)
+        unfold all_locs_in_loc_heap_exist.
+        intros name loc.
+        assert (loc_heap_unchanged:
+        Heap.binds (Store.loc_heap st2) name loc =
+        Heap.binds (Store.loc_heap st) name loc).
+          inversion st2_decl as [(st2_def, loc0_def)].
+          rewrite st_def.
+          simpl.
+          reflexivity.
+
+          rewrite loc_heap_unchanged.
+          intro binds_name_loc.
+          apply st2_decl_copy.
+          unfold all_locs_in_loc_heap_exist in IH_val.
+          apply IH_val with name.
+          apply binds_name_loc.
+
+        (* The values used as the object's attributes are supposed to exist,
+        * so adding the object preserves all_locs_in_obj_heap_exist. *)
+        unfold all_locs_in_obj_heap_exist.
+        intros ptr obj obj_in_heap.
+        unfold superstore in st2_decl_copy.
+        unfold all_locs_in_obj_heap_exist in IH_obj.
+        unfold object_locs_exist in obj0_consistant.
+        unfold object_locs_exist.
+        intros proto_loc class extensible primval_opt_loc props code obj_eq_obj.
+        destruct obj.
+        inversion obj_eq_obj as [(proto_eq,class_eq,ext_eq,primval_eq,props_eq,code_eq)].
+        assert (obj_consistant: ok_loc st object_proto /\
+        ok_loc_option st object_prim_value /\ ok_loc_option st object_code).
+          tests obj0_eq_obj: (obj0 = {|
+                 object_proto := proto_loc;
+                 object_class := class;
+                 object_extensible := extensible;
+                 object_prim_value := primval_opt_loc;
+                 object_properties_ := props;
+                 object_code := code |}).
+          apply obj0_consistant with object_class object_extensible object_properties_.
+          symmetry.
+          apply obj_eq_obj.
+
+          assert (obj_in_st: Heap.binds (Store.object_heap st) ptr {|
+                  object_proto := proto_loc;
+                  object_class := class;
+                  object_extensible := extensible;
+                  object_prim_value := primval_opt_loc;
+                  object_properties_ := props;
+                  object_code := code |}).
+            inversion st2_decl as [(st2_def, loc0_def)].
+            clear st2_decl.
+            rewrite st_def.
+            simpl.
+            rewrite <-obj_eq_obj.
+            rewrite <-st2_def in obj_in_heap.
+            simpl in obj_in_heap.
+            apply HeapUtils.binds_write_inv_val_neq with n0 obj0.
+              apply obj_in_heap.
+
+              congruence. (* uses obj0_eq_obj *)
+
+            unfold object_locs_exist in IH_obj.
+            eapply IH_obj.
+              apply obj_in_st.
+
+              rewrite proto_eq.
+              rewrite primval_eq.
+              rewrite code_eq.
+              reflexivity.
+
+          destruct obj_consistant as (ok_loc_proto, obj_consistant2).
+          destruct obj_consistant2 as (ok_loc_primval, ok_loc_code).
+          split.
+            apply superstore_st_st2.
+            rewrite <-proto_eq.
+            apply ok_loc_proto.
+
+            split.
+              eapply superstore_ok_loc_option in superstore_st_st2.
+                apply superstore_st_st2.
+
+                rewrite <-primval_eq.
+                apply ok_loc_primval.
+
+              eapply superstore_ok_loc_option in superstore_st_st2.
+                apply superstore_st_st2.
+
+                rewrite <-code_eq.
+                apply ok_loc_code.
+Qed.
 
 Lemma add_object_preserves_all_locs_exist :
   forall st st2 obj loc,
@@ -583,7 +758,6 @@ Proof.
 
             inversion H as [(st7_def, res4_def)].
             rewrite <-st7_def.
-            symmetry.
             apply st3_def.
 
 

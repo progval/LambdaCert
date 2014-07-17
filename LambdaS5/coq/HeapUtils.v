@@ -27,3 +27,20 @@ Proof.
     apply Heap.binds_write_neq.
     apply Hv.
 Qed.
+
+Lemma binds_write_inv_val_neq : forall X Y (h : Heap.heap X Y) k v k' v',
+  Heap.binds (Heap.write h k' v') k v -> v <> v' ->
+  Heap.binds h k v
+.
+Proof.
+  intros X Y h k v k' v' IH v_neq_v'.
+  apply Heap.binds_write_inv in IH.
+  destruct IH as [H|H].
+    destruct H as (H_keys,H_values).
+    apply v_neq_v' in H_values.
+    contradiction.
+
+    destruct H as (H_keys,H_binds).
+    apply H_binds.
+Qed.
+
