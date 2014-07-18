@@ -69,25 +69,37 @@ Lemma result_value_loc_exists_change_ok_exception :
   result_value_loc_exists ok1 st (@Exception X v) ->
   result_value_loc_exists ok2 st (@Exception Y v)
 .
-Admitted.
+Proof.
+  intros X Y st v ok1 ok2 H.
+  apply result_value_loc_exists_exception.
+  inversion H.
+  assumption.
+Qed.
+
 
 Lemma result_value_loc_exists_change_ok_break :
   forall X Y st v ok1 ok2 b c,
   result_value_loc_exists ok1 st (@Break X b v) ->
   result_value_loc_exists ok2 st (@Break Y c v)
 .
-Admitted.
-
-Definition runs_type_eval_preserves_all_locs_exist runs :=
-  forall st e st2 res,
-  runs_type_eval runs st e = (st2, res) ->
-  all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
-.
+Proof.
+  intros X Y st v ok1 ok2 b c H.
+  apply result_value_loc_exists_break.
+  inversion H.
+  assumption.
+Qed.
 
 
 (* st2 is a superset of st. *)
 Definition superstore (st st2 : Store.store) :=
   forall loc, ok_loc st loc -> ok_loc st2 loc
+.
+
+Definition runs_type_eval_preserves_all_locs_exist runs :=
+  forall st e st2 res,
+  runs_type_eval runs st e = (st2, res) ->
+  superstore st st2 /\ all_locs_exist st2 /\
+  result_value_loc_exists ok_loc st2 res
 .
 
 Lemma superstore_ok_loc_option :
@@ -121,6 +133,32 @@ Proof.
   apply IH.
 Qed.
 
+Lemma superstore_refl :
+  forall st,
+  superstore st st
+.
+Proof.
+  intro st.
+  unfold superstore.
+  trivial.
+Qed.
+
+Lemma superstore_trans :
+  forall st1 st2 st3,
+  superstore st1 st2 ->
+  superstore st2 st3 ->
+  superstore st1 st3
+.
+Proof.
+  intros st1 st2 st3 H_1_2 H_2_3.
+  unfold superstore.
+  unfold superstore in H_1_2.
+  unfold superstore in H_2_3.
+  intros loc H_1.
+  apply H_2_3.
+  apply H_1_2.
+  apply H_1.
+Qed.
 
 (******** Consistency of Store operations ********)
 
@@ -586,28 +624,49 @@ Qed.
 
 
 
-
 (******** Consistency of monads ********)
 
-Lemma monad_ec_preserves_all_locs_exist :
-  forall runs st st2 e (cont : Store.store -> Context.result -> (Store.store * Context.result)) res2,
+Lemma monad_ec_preserves_props :
+  forall X runs st st2 e (cont : Store.store -> Context.result -> (Store.store * @Context.result X)) res2 P,
   runs_type_eval_preserves_all_locs_exist runs ->
   all_locs_exist st ->
-  (forall st0 res0 st1 res,
+  (forall st0 res0 st1 res1,
+    superstore st st0 ->
     all_locs_exist st0 /\ result_value_loc_exists ok_loc st0 res0 ->
-    cont st0 res0 = (st1, res) ->
-    all_locs_exist st1 /\ result_value_loc_exists ok_loc st1 res) ->
+    cont st0 res0 = (st1, res1) ->
+    superstore st0 st1 /\ P st1 res1) ->
   Monads.eval_cont runs st e cont = (st2, res2) ->
-  all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res2
+  superstore st st2 /\ P st2 res2
 .
 Proof.
-  intros runs st st2 e cont res2 runs_cstt IH cont_consistant st2_decl.
+  intros X runs st st2 e cont res2 P runs_cstt IH cont_consistant st2_decl.
   unfold Monads.eval_cont in st2_decl.
-  destruct (runs_type_eval runs st e) eqn:st_decl.
-  apply cont_consistant with s r.
+  destruct (runs_type_eval runs st e) eqn:s_decl.
+  split.
+    apply superstore_trans with s.
+      unfold runs_type_eval_preserves_all_locs_exist in runs_cstt.
+      forwards :runs_cstt.
+        apply s_decl.
+
+        apply H.
+        
+      unfold runs_type_eval_preserves_all_locs_exist in runs_cstt.
+      apply (cont_consistant s r st2 res2).
+        apply (runs_cstt st e s r).
+        apply s_decl.
+
+        apply (runs_cstt st e s r).
+        apply s_decl.
+
+        apply st2_decl.
+
+  apply (cont_consistant s r st2 res2).
+    apply (runs_cstt st e s r).
+    apply s_decl.
+
     unfold runs_type_eval_preserves_all_locs_exist in runs_cstt.
-    eapply runs_cstt.
-    apply st_decl.
+    apply (runs_cstt st e s r).
+    apply s_decl.
 
     apply st2_decl.
 Qed.
@@ -622,60 +681,106 @@ Lemma monad_ect_preserves_all_locs_exist :
 Proof.
   intros runs st st2 e res2 runs_cstt IH st2_decl.
   unfold Monads.eval_cont_terminate in st2_decl.
-  apply monad_ec_preserves_all_locs_exist with runs st e (fun (store : store) (res : result) => (store, res)).
+  eapply (monad_ec_preserves_props Values.value_loc runs st st2 e (fun (store : store) (res : result) => (store, res)) res2).
     apply runs_cstt.
 
     apply IH.
 
-    intros st0 res0 st1 res H eq.
-    inversion eq.
-    congruence.
+    intros st0 res0 st1 res1 H1 H2 eq.
+    inversion eq as [(st_eq, res_eq)].
+    rewrite <-st_eq.
+    rewrite <-res_eq.
+    split.
+      apply superstore_refl.
+
+      apply H2.
 
     apply st2_decl.
 Qed.
 
-Lemma monad_ir_preserves_all_locs_exist (X : Type) :
-  forall st st2 (var : X) res (cont : X -> (Store.store * (@Context.result Values.value_loc))) res2,
+Lemma monad_ir_preserves_props_loc :
+  forall st st2 res (cont : Values.value_loc -> (Store.store * (@Context.result Values.value_loc))) res2 (P : Store.store -> Context.result -> Prop),
   all_locs_exist st ->
-  result_value_loc_exists ignore_loc st res -> (*
-  (forall exc, res = Exception exc -> ok_loc st exc) ->
-  (forall b v, res = Break b v -> ok_loc st v) -> *)
-  (forall res0 st1 res,
-    cont res0 = (st1, res) ->
-    all_locs_exist st1 /\ result_value_loc_exists ok_loc st1 res) ->
+  result_value_loc_exists ok_loc st res ->
+  (forall v, res = Exception v -> P st res) ->
+  (forall b v, res = Break b v -> P st res) ->
+  (forall f, res = Fail f -> P st res) ->
+  (forall loc st1 res,
+    ok_loc st loc ->
+    cont loc = (st1, res) ->
+    superstore st st1 /\ P st1 res) ->
   Monads.if_return st res cont = (st2, res2) ->
-  all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res2
+  superstore st st2 /\ P st2 res2
 .
 Proof.
-  intros st st2 var res cont res2 IH H_res H st2_decl.
+  intros st st2 res cont res2 P IH H_res H_exc H_brk H_fail H st2_decl.
   unfold Monads.if_return in st2_decl.
   destruct res eqn:res_def; inversion st2_decl as [(st2_def, res2_def)].
-    apply H with x.
-    apply st2_decl.
+    apply H with v.
+      inversion H_res.
+      assumption.
+
+      apply st2_decl.
 
     rewrite <-st2_def.
     split.
-      apply IH.
+      apply superstore_refl.
 
-      eapply result_value_loc_exists_change_ok_exception.
-      apply H_res.
-
-    rewrite <-st2_def.
-    split.
-      apply IH.
-
-      eapply result_value_loc_exists_change_ok_break.
-      apply H_res.
+      apply (H_exc v).
+      reflexivity.
 
     rewrite <-st2_def.
     split.
-      apply IH.
+      apply superstore_refl.
 
-      apply result_value_loc_exists_fail.
+      apply (H_brk s v).
+      reflexivity.
+
+    rewrite <-st2_def.
+    split.
+      apply superstore_refl.
+
+      apply (H_fail s).
+      reflexivity.
 Qed.
 
-Lemma monad_iseren_preserves_all_locs_exist :
-  forall runs st st2 opt (cont : Store.store -> option Values.value_loc -> (Store.store * Context.result)) res2,
+Lemma monad_ir_preserves_props_props :
+  forall st st2 res (cont : Values.object_properties -> (Store.store * (@Context.result Values.value_loc))) res2 (P : Store.store -> Context.result -> Prop),
+  all_locs_exist st ->
+  Logic.True -> (* TODO: write a predicate meaning that properties contain only existing locations. *)
+  (forall v, res = Exception v -> P st res) ->
+  (forall b v, res = Break b v -> P st res) ->
+  (forall f, res = Fail f -> P st res) ->
+  (forall props st1 res,
+    Logic.True -> (* TODO: see above *)
+    cont props = (st1, res) ->
+    superstore st st1 /\ P st1 res) ->
+  Monads.if_return st res cont = (st2, res2) ->
+  superstore st st2 /\ P st2 res2
+.
+Admitted.
+
+Lemma monad_ier_preserves_props :
+  forall X runs st st2 e (cont : Store.store -> Values.value_loc -> (Store.store * @Context.result X)) loc2 (P : Store.store -> @Context.result X -> Prop),
+  runs_type_eval_preserves_all_locs_exist runs ->
+  all_locs_exist st ->
+  (forall st0 loc0 st1 res,
+    superstore st st0 ->
+    all_locs_exist st0 /\ ok_loc st0 loc0 ->
+    cont st0 loc0 = (st1, res) ->
+    superstore st0 st1 /\ P st1 res) ->
+  Monads.if_eval_return runs st e cont = (st2, loc2) ->
+  superstore st st2 /\ P st2 loc2
+.
+Proof.
+  intros X runs st st2 e cont res P.
+  intros runs_cstt IH H H_res.
+  unfold Monads.if_eval_return in H_res.
+Admitted.
+      
+
+Lemma monad_iseren_preserves_props :
+  forall X runs st st2 opt (cont : Store.store -> option Values.value_loc -> (Store.store * @Context.result X)) res2 P,
   runs_type_eval_preserves_all_locs_exist runs->
   all_locs_exist st ->
   (forall st0 oloc0 st1 res,
@@ -683,14 +788,48 @@ Lemma monad_iseren_preserves_all_locs_exist :
     all_locs_exist st0 ->
     ok_loc_option st0 oloc0 ->
     cont st0 oloc0 = (st1, res) ->
-    all_locs_exist st1 /\ result_value_loc_exists ok_loc st1 res) ->
+    superstore st0 st1 /\ P st1 res) ->
   Monads.if_some_eval_return_else_none runs st opt cont = (st2, res2) ->
-  all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res2
+  superstore st st2 /\ P st2 res2
 .
-Admitted.
+Proof.
+  intros X runs st st2 opt cont res2 P runs_cstt IH H H_res.
+  destruct opt.
+    unfold Monads.if_some_eval_return_else_none in H_res.
+    apply monad_ier_preserves_props with runs e
+    (fun (ctx : store) (res : value_loc) => cont ctx (Some res)).
+      apply runs_cstt.
 
-Lemma monad_iseed_preserves_all_locs_exist :
-  forall runs st st2 opt default (cont : Store.store -> Values.value_loc -> (Store.store * Context.result)) res2,
+      apply IH.
+
+      intros st' loc' st'2 res' superstore_st_st' IH' H'.
+      apply H with (Some loc').
+        apply superstore_st_st'.
+
+        apply IH'.
+
+        unfold ok_loc_option.
+        apply IH'.
+
+        apply H'.
+
+      apply H_res.
+
+    unfold Monads.if_some_eval_return_else_none in H_res.
+    apply H with None.
+      apply superstore_refl.
+
+      apply IH.
+
+      unfold ok_loc_option.
+      trivial.
+
+      apply H_res.
+Qed.
+
+
+Lemma monad_iseed_preserves_props :
+  forall X runs st st2 opt default (cont : Store.store -> Values.value_loc -> (Store.store * (@Context.result X))) res2 P,
   runs_type_eval_preserves_all_locs_exist runs ->
   all_locs_exist st ->
   (forall st0 loc0 st1 res,
@@ -698,9 +837,9 @@ Lemma monad_iseed_preserves_all_locs_exist :
     all_locs_exist st0 ->
     ok_loc st0 loc0 ->
     cont st0 loc0 = (st1, res) ->
-    all_locs_exist st1 /\ result_value_loc_exists ok_loc st1 res) ->
+    superstore st0 st1 /\ P st1 res) ->
   Monads.if_some_eval_else_default runs st opt default cont = (st2, res2) ->
-  all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res2
+  superstore st st2 /\ P st2 res2
 .
 Admitted.
 
@@ -768,7 +907,7 @@ Lemma eval_object_properties_preserves_all_locs_exist :
   forall runs st st2 props props2,
   all_locs_exist st ->
   eval_object_properties runs st props = (st2, props2) ->
-  all_locs_exist st2 /\ result_value_loc_exists ignore_loc st2 props2
+  superstore st st2 /\ all_locs_exist st2 /\ result_value_loc_exists ignore_loc st2 props2
 .
 Admitted.
 
@@ -781,143 +920,210 @@ Lemma eval_objectdecl_preserves_all_locs_exist :
   all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
 .
 Proof.
+  Definition pred := fun st res => all_locs_exist st /\ result_value_loc_exists ok_loc st res.
   intros runs st st2 attrs props res runs_cstt IH.
   unfold eval_object_decl.
   destruct attrs as (primval_opt_expr,value_opt_expr,prototype_opt_expr,class,extensible).
-  apply monad_iseren_preserves_all_locs_exist.
+  apply monad_iseren_preserves_props with (P:=pred).
     apply runs_cstt.
 
     apply IH.
 
-    intros st0 primval_oloc st1 res0 superstore_st_st0 st0_consistant ok_loc_oloc0.
+    intros st0 primval_oloc st1 res0 superstore_st_st0 st0_consistant ok_loc_oloc0 H.
     destruct (add_value st0 Undefined) as (store0,proto_default) eqn:store_def.
-    apply monad_iseed_preserves_all_locs_exist.
-      apply runs_cstt.
-
-      apply add_value_preserves_store_consistency in store_def.
-      apply store_def.
-      apply st0_consistant.
-
-      intros st3 proto_loc st4 res1 superstore_store0_st3 st3_consistant ok_loc_proto_loc.
-      apply monad_iseren_preserves_all_locs_exist.
+    assert (H': superstore store0 st1 /\
+    all_locs_exist st1 /\ result_value_loc_exists ok_loc st1 res0).
+      apply (monad_iseed_preserves_props Values.value_loc runs store0 st1 prototype_opt_expr proto_default
+      (fun (store : store) (prototype_loc : value_loc) =>
+       Monads.if_some_eval_return_else_none runs store value_opt_expr
+         (fun (store1 : Store.store) (code : option value_loc) =>
+          let (store2, props0) := eval_object_properties runs store1 props in
+          Monads.if_return store2 props0
+            (fun props1 : object_properties =>
+             let (store3, loc) :=
+                 add_object store2
+                   {|
+                   object_proto := prototype_loc;
+                   object_class := class;
+                   object_extensible := extensible;
+                   object_prim_value := primval_oloc;
+                   object_properties_ := props1;
+                   object_code := code |} in
+             (store3, Return loc))))
+      ) with (P:=fun st res => all_locs_exist st /\ result_value_loc_exists ok_loc st res).
         apply runs_cstt.
 
-        apply st3_consistant.
+        apply add_value_preserves_store_consistency in store_def.
+        apply store_def.
+        apply st0_consistant.
 
-        intros st5 code_oloc st6 res2 superstore_st3_st5 st5_consistant ok_loc_code_oloc.
-        destruct (eval_object_properties runs st5 props) as (store1, props0) eqn:store_def2.
-        assert (store1_consistant: all_locs_exist store1).
-          eapply eval_object_properties_preserves_all_locs_exist with (st:=st5).
+        intros st3 proto_loc st4 res1 superstore_store0_st3 st3_consistant ok_loc_proto_loc H'.
+        Check monad_iseren_preserves_props.
+        apply (monad_iseren_preserves_props Values.value_loc runs st3 st4 value_opt_expr
+        (fun (store1 : Store.store) (code : option value_loc) =>
+          let (store2, props0) := eval_object_properties runs store1 props in
+          Monads.if_return store2 props0
+            (fun props1 : object_properties =>
+             let (store3, loc) :=
+                 add_object store2
+                   {|
+                   object_proto := proto_loc;
+                   object_class := class;
+                   object_extensible := extensible;
+                   object_prim_value := primval_oloc;
+                   object_properties_ := props1;
+                   object_code := code |} in
+             (store3, Return loc)))
+        ) with (P:=pred).
+          apply runs_cstt.
+
+          apply st3_consistant.
+
+          intros st5 code_oloc st6 res2 superstore_st3_st5 st5_consistant ok_loc_code_oloc H''.
+          destruct (eval_object_properties runs st5 props) as (store1, props0) eqn:store_def2.
+          assert (store1_consistant: all_locs_exist store1).
+            eapply eval_object_properties_preserves_all_locs_exist with (st:=st5).
+              apply st5_consistant.
+
+              apply store_def2.
+          assert (props0_consistant: result_value_loc_exists ignore_loc store1 props0).
+            apply eval_object_properties_preserves_all_locs_exist with runs st5 props.
+              apply st5_consistant.
+
+              apply store_def2.
+
+
+          Check monad_ir_preserves_props_props.
+          eapply (monad_ir_preserves_props_props st5 st6 res2
+          (fun props1 : object_properties =>
+            let (store3, loc) :=
+                add_object store1
+                  {|
+                  object_proto := proto_loc;
+                  object_class := class;
+                  object_extensible := extensible;
+                  object_prim_value := primval_oloc;
+                  object_properties_ := props1;
+                  object_code := code_oloc |} in
+            (store3, Return loc))
+            ) with (P:=pred).
             apply st5_consistant.
 
-            apply store_def2.
-        assert (props0_consistant: result_value_loc_exists ignore_loc store1 props0).
-          apply eval_object_properties_preserves_all_locs_exist with runs st5 props.
-            apply st5_consistant.
+            Focus 2.
 
-            apply store_def2.
-
-
-        apply (monad_ir_preserves_all_locs_exist object_properties).
-          apply Heap.empty.
-
-          eapply eval_object_properties_preserves_all_locs_exist.
-            apply st5_consistant.
-
-            apply store_def2.
-
-          apply props0_consistant.
-
-          intros res3 st7 res4.
-          destruct (add_object store1
-            {|
-            object_proto := proto_loc;
-            object_class := class;
-            object_extensible := extensible;
-            object_prim_value := primval_oloc;
-            object_properties_ := res3;
-            object_code := code_oloc |}) as (store2,obj_loc) eqn:st3_def.
-          assert (obj_consistant: object_locs_exist store1 {|
-          object_proto := proto_loc;
-          object_class := class;
-          object_extensible := extensible;
-          object_prim_value := primval_oloc;
-          object_properties_ := res3;
-          object_code := code_oloc |}).
-
-            unfold object_locs_exist.
-            intros proto_loc0 class0 extensible0 primval_opt_loc props1 code_opt_loc H0.
-            inversion H0 as [(proto_eq,class_eq,ext_eq,primval_eq,props_eq,code_eq)].
-            clear H0.
-            rewrite <-proto_eq, <-primval_eq, <-code_eq.
+            intros v H_v.
             split.
-              apply eval_object_properties_preserves_ok_loc with runs st5 props props0.
-                apply superstore_st3_st5.
-                apply ok_loc_proto_loc.
-              apply store_def2.
+              apply st5_consistant.
 
-              split.
-                apply eval_object_properties_preserves_ok_loc_option with runs st5 props props0.
-                apply superstore_ok_loc_option with st3.
-                  apply superstore_st3_st5.
+              rewrite H_v.
 
-                  apply superstore_ok_loc_option with store0.
-                    apply superstore_store0_st3.
+            rewrite <-H_v.
+            assert (pred2:=superstore 
+            apply monad_iseren_preserves_props.
+            apply H''.
 
-                    assert (superstore_st0_store0: superstore st0 store0).
-                      apply add_value_makes_superstore with Undefined proto_default.
-                      apply store_def.
+            intros st7 loc0 st8 res3 superstore_st5_st7 st7_consistant ok_loc_loc0 foo.
 
-                    apply superstore_ok_loc_option with st0.
-                    apply superstore_st0_store0.
-                    apply ok_loc_oloc0.
+            Focus 2.
 
-            apply store_def2.
+            apply H'.
 
-            apply eval_object_properties_preserves_ok_loc_option with runs st5 props props0.
-              apply ok_loc_code_oloc.
+            Focus 2.
 
-              apply store_def2.
+            eapply H.
 
-          split.
+            apply props0_consistant.
 
-            eapply add_object_preserves_store_consistant with (obj := {|
+            intros res3 st7 res4.
+            destruct (add_object store1
+              {|
+              object_proto := proto_loc;
+              object_class := class;
+              object_extensible := extensible;
+              object_prim_value := primval_oloc;
+              object_properties_ := res3;
+              object_code := code_oloc |}) as (store2,obj_loc) eqn:st3_def.
+            assert (obj_consistant: object_locs_exist store1 {|
             object_proto := proto_loc;
             object_class := class;
             object_extensible := extensible;
             object_prim_value := primval_oloc;
             object_properties_ := res3;
             object_code := code_oloc |}).
-              edestruct add_object_preserves_all_locs_exist as (store2_consistant,obj_loc_in_store2).
-                apply store1_consistant.
 
-                apply obj_consistant.
+              unfold object_locs_exist.
+              intros proto_loc0 class0 extensible0 primval_opt_loc props1 code_opt_loc H0.
+              inversion H0 as [(proto_eq,class_eq,ext_eq,primval_eq,props_eq,code_eq)].
+              clear H0.
+              rewrite <-proto_eq, <-primval_eq, <-code_eq.
+              split.
+                apply eval_object_properties_preserves_ok_loc with runs st5 props props0.
+                  apply superstore_st3_st5.
+                  apply ok_loc_proto_loc.
+                apply store_def2.
 
-                apply st3_def.
+                split.
+                  apply eval_object_properties_preserves_ok_loc_option with runs st5 props props0.
+                  apply superstore_ok_loc_option with st3.
+                    apply superstore_st3_st5.
 
-                edestruct eval_object_properties_preserves_all_locs_exist as (store1_cstt_val,store1_cstt_obj).
-                  apply st5_consistant.
+                    apply superstore_ok_loc_option with store0.
+                      apply superstore_store0_st3.
 
-                  apply store_def2.
+                      assert (superstore_st0_store0: superstore st0 store0).
+                        apply add_value_makes_superstore with Undefined proto_default.
+                        apply store_def.
 
-                apply store1_consistant.
+                      apply superstore_ok_loc_option with st0.
+                      apply superstore_st0_store0.
+                      apply ok_loc_oloc0.
 
-            apply obj_consistant.
+              apply store_def2.
+
+              apply eval_object_properties_preserves_ok_loc_option with runs st5 props props0.
+                apply ok_loc_code_oloc.
+
+                apply store_def2.
+
+            split.
+
+              eapply add_object_preserves_store_consistant with (obj := {|
+              object_proto := proto_loc;
+              object_class := class;
+              object_extensible := extensible;
+              object_prim_value := primval_oloc;
+              object_properties_ := res3;
+              object_code := code_oloc |}).
+                edestruct add_object_preserves_all_locs_exist as (store2_consistant,obj_loc_in_store2).
+                  apply store1_consistant.
+
+                  apply obj_consistant.
+
+                  apply st3_def.
+
+                  edestruct eval_object_properties_preserves_all_locs_exist as (store1_cstt_val,store1_cstt_obj).
+                    apply st5_consistant.
+
+                    apply store_def2.
+
+                  apply store1_consistant.
+
+              apply obj_consistant.
+
+              inversion H as [(st7_def, res4_def)].
+              rewrite <-st7_def.
+              apply st3_def.
+
 
             inversion H as [(st7_def, res4_def)].
             rewrite <-st7_def.
-            apply st3_def.
+            apply result_value_loc_exists_return.
+            eapply add_object_preserves_all_locs_exist.
+              apply store1_consistant.
 
+              apply obj_consistant.
 
-          inversion H as [(st7_def, res4_def)].
-          rewrite <-st7_def.
-          apply result_value_loc_exists_return.
-          eapply add_object_preserves_all_locs_exist.
-            apply store1_consistant.
-
-            apply obj_consistant.
-
-            apply st3_def.
+              apply st3_def.
 Qed.
 
 
