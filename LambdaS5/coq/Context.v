@@ -10,11 +10,11 @@ Require Import Store.
 * Return or Exception, but sometimes we want to return another kind
 * of result, which is the reason why this type is parametered by
 * value_type. *)
-Inductive result {value_type : Type} : Type :=
-  | Return : value_type -> result (* value *)
-  | Exception : Values.value_loc -> result (* exception message *)
-  | Break : string -> Values.value_loc -> result (* label, expression *)
-  | Fail : string -> result (* reason *)
+Inductive result (value_type : Type) : Type :=
+  | Return : value_type -> result value_type (* value *)
+  | Exception : Values.value_loc -> result value_type (* exception message *)
+  | Break : string -> Values.value_loc -> result value_type (* label, expression *)
+  | Fail : string -> result value_type (* reason *)
 .
 
 Definition runner_type (runner_arg : Type) (runner_ret : Type) :=
@@ -28,10 +28,10 @@ Record runs_type : Type := runs_type_intro {
 }.
 
 (* Shortcut for instanciating and throwing an exception of the given name. *)
-Definition raise_exception store (name : string) : (Store.store * (@Context.result Values.value_loc)) :=
+Definition raise_exception store (name : string) : (Store.store * (Context.result Values.value_loc)) :=
   let (store, proto_loc) := (Store.add_value store Values.Undefined) in
   match (Store.add_object store (Values.object_intro proto_loc name true None Heap.empty None)) with
-  | (new_st, loc) => (new_st, Exception loc)
+  | (new_st, loc) => (new_st, Exception Values.value_loc loc)
   end
 .
 
@@ -43,7 +43,7 @@ Definition update_object {return_type : Type} store (ptr : Values.object_ptr) (p
       match (pred obj) with (store, new_obj, ret) =>
         (Store.update_object store ptr new_obj, ret)
       end
-  | None => (store, Fail "Pointer to a non-existing object.")
+  | None => (store, Fail return_type "Pointer to a non-existing object.")
   end
 .
 
@@ -72,7 +72,7 @@ Definition update_object_property {return_type : Type} store (ptr : Values.objec
 
 Definition add_value_return store v :=
   let (store, loc) := Store.add_value store v in
-  (store, Return loc)
+  (store, Return Values.value_loc loc)
 .
 
 Definition return_bool store (b : bool) :=
