@@ -50,7 +50,7 @@ OCaml package manager) should be ok:
 ```
 sudo aptitude install autotools git subversion ocaml ocaml-native-compilers ocaml-findlib camlp4-extra opam coq coq-theories libcoq-ocaml m4 autoconf
 OPAMYES=1 opam init
-OPAMYES=1 opam install xml-light bisect
+OPAMYES=1 opam install xml-light bisect ocamlgraph
 eval `opam config env`
 ```
 
@@ -84,16 +84,6 @@ cd ~/js/
 git clone https://github.com/ProgVal/LambdaS5.git
 cd LambdaS5/
 git checkout working
-```
-
-Then, compile ocamlgraph:
-
-```
-cd src/ocamlgraph-1.8.1
-autoreconf
-./configure
-make
-cp graph.cmi graph.cma ../../lib/
 ```
 
 Then, you can compile LambdaS5:

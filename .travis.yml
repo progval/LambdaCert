@@ -10,7 +10,7 @@ before_install:
     - sudo apt-get install opam coq coq-theories
     - export OPAMYES=1
     - opam init
-    - opam install xml-light bisect
+    - opam install xml-light bisect ocamlgraph
     - eval `opam config env`
     - ./get_deps.sh
 install:
