@@ -1129,12 +1129,13 @@ Proof.
 
     apply H_res.
 Qed.
- 
+
 Lemma monad_ier_for_locs_preserves_props :
   forall runs st st2 e (cont : Store.store -> Values.value_loc -> (Store.store * @Context.result Values.value_loc)) loc2 (P : Store.store -> Context.result Values.value_loc -> Prop),
   runs_type_eval_preserves_all_locs_exist runs ->
   all_locs_exist st ->
   (forall st' res', all_locs_exist st' /\ result_value_loc_exists ok_loc st' res' -> P st' res') ->
+  (forall st' res', P st' res' -> all_locs_exist st') ->
   (forall st0 loc0 st1 res,
     superstore st st0 ->
     all_locs_exist st0 /\ ok_loc st0 loc0 ->
@@ -1143,13 +1144,77 @@ Lemma monad_ier_for_locs_preserves_props :
   Monads.if_eval_return runs st e cont = (st2, loc2) ->
   superstore st st2 /\ P st2 loc2
 .
-Admitted.
+Proof.
+  intros runs st st2 e cont loc P runs_cstt st_cstt H_P H_P' H_cont H.
+  unfold Monads.if_eval_return in H.
+  assert (H': superstore st st2 /\ all_locs_exist st2 /\ P st2 loc).
+    apply (monad_ec_preserves_props Values.value_loc runs st st2 e
+            (fun (store : store) (res0 : result value_loc) =>
+             Monads.if_return store res0 (cont store))
+            loc
+            (fun st res => all_locs_exist st /\ P st res)); try assumption.
+
+    intros st0 res0 st1 res1.
+    intros superstore_st_st0 IH1 H1.
+    Check monad_ir_preserves_props.
+    apply (monad_ir_preserves_pred Values.value_loc st0 st1 res0 (cont st0)
+           res1
+           (fun st res => all_locs_exist st /\ P st res)); try assumption.
+      apply IH1.
+
+      apply IH1.
+
+      intros v res0_def.
+      split.
+        apply IH1.
+
+        apply H_P.
+        rewrite <-res0_def.
+        apply IH1.
+
+      intros b v res0_def.
+      split.
+        apply IH1.
+
+        apply H_P.
+        rewrite <-res0_def.
+        apply IH1.
+
+      intros f res0_def.
+      split.
+        apply IH1.
+
+        apply H_P.
+        rewrite <-res0_def.
+        apply IH1.
+
+      intros loc0 st3 res loc0_in_st0 st3_decl.
+      assert (H': superstore st0 st3 /\ P st3 res).
+        apply H_cont with loc0; try assumption.
+        split.
+          apply IH1.
+
+          apply loc0_in_st0.
+
+        split.
+          apply H'.
+
+          split.
+            apply H_P' with res.
+            apply H'.
+
+            apply H'.
+
+    split;
+      apply H'.
+Qed.
 
 Lemma monad_iseren_preserves_props :
   forall runs st st2 opt (cont : Store.store -> option Values.value_loc -> (Store.store * Context.result Values.value_loc)) res2 (P : Store.store -> Context.result Values.value_loc -> Prop),
   runs_type_eval_preserves_all_locs_exist runs->
   all_locs_exist st ->
   (forall st' res', all_locs_exist st' /\ result_value_loc_exists ok_loc st' res' -> P st' res') ->
+  (forall st' res', P st' res' -> all_locs_exist st') ->
   (forall st0 oloc0 st1 res,
     superstore st st0 ->
     all_locs_exist st0 ->
@@ -1160,7 +1225,7 @@ Lemma monad_iseren_preserves_props :
   superstore st st2 /\ P st2 res2
 .
 Proof.
-  intros runs st st2 opt cont res2 P runs_cstt st_cstt H_P H_cont H.
+  intros runs st st2 opt cont res2 P runs_cstt st_cstt H_P H_P' H_cont H.
   unfold Monads.if_some_eval_return_else_none in H.
   destruct opt eqn:opt_def.
     Check monad_ier_for_locs_preserves_props.
@@ -1291,6 +1356,9 @@ Proof.
       unfold pred.
       trivial.
 
+      unfold pred.
+      intuition.
+
       Focus 2.
       apply st0'_decl.
 
@@ -1346,6 +1414,9 @@ Proof.
 
   unfold pred.
   trivial.
+
+  unfold pred.
+  intuition.
 
   (* Unfold object_code_loc allocation. *)
   intros st4 object_code_loc st4' res4.
