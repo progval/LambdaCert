@@ -918,7 +918,103 @@ Lemma monad_ir_preserves_props :
   (forall b v, res = Break Values.object_properties b v -> res2 = Break Y b v) /\
   (forall f, res = Fail Values.object_properties f -> res2 = Fail Y f)
 .
-Admitted.
+Proof.
+  intros Y st st2 res cont res2 P IH res_cstt cont_cstt H.
+  Definition pred Y res st2 res2 (P : Store.store -> Context.result Y -> Prop) : Prop :=
+    (forall v : object_properties, res = Return object_properties v -> P st2 res2) /\
+    (forall v : value_loc, res = Exception object_properties v -> res2 = Exception Y v) /\
+    (forall (b : string) (v : value_loc), res = Break object_properties b v -> res2 = Break Y b v) /\
+    (forall f : string, res = Fail object_properties f -> res2 = Fail Y f)
+  .
+  unfold Monads.if_return in H.
+  destruct res as [props|exc|brk|f] eqn:res_def; inversion H as [(st2_def, res2_def)].
+    (* Return *)
+    inversion res_cstt.
+    split.
+      apply (cont_cstt props st2 res2).
+        assumption.
+        assumption.
+
+      split.
+        intros v' H_eq.
+        apply (cont_cstt props st2 res2).
+        assumption.
+        assumption.
+
+        split.
+          intros v' H_absurd.
+          inversion H_absurd.
+
+          split.
+            intros b v' H_absurd.
+            inversion H_absurd.
+
+            intros f H_absurd.
+            inversion H_absurd.
+
+    (* Exception *)
+    split.
+      apply superstore_refl.
+
+      split.
+        intros v H_absurd.
+        inversion H_absurd.
+
+        split.
+          intros exc' exc'_def.
+          inversion exc'_def as [H_eq].
+          reflexivity.
+
+          split.
+            intros b v' H_absurd.
+            inversion H_absurd.
+
+            intros f H_absurd.
+            inversion H_absurd.
+
+    (* Break *)
+    split.
+      apply superstore_refl.
+
+      split.
+        intros v' H_absurd.
+        inversion H_absurd.
+
+        split.
+          intros v' H_absurd.
+          inversion H_absurd.
+
+          split.
+            intros brk' v' H'.
+            inversion H' as [(brk_eq, v_eq)].
+            rewrite <-brk_eq.
+            rewrite <-v_eq.
+            reflexivity.
+
+            intros f H_absurd.
+            inversion H_absurd.
+
+    (* Fail *)
+    split.
+      apply superstore_refl.
+
+      split.
+        intros v' H_absurd.
+        inversion H_absurd.
+
+        split.
+          intros v' H_absurd.
+          inversion H_absurd.
+
+          split.
+            intros b v' H_absurd.
+            inversion H_absurd.
+
+            intros f' H_eq.
+            inversion H_eq as [f_eq].
+            rewrite <-f_eq.
+            reflexivity.
+Qed.
 
 Lemma monad_ier_preserves_props :
   forall X runs st st2 e (cont : Store.store -> Values.value_loc -> (Store.store * @Context.result X)) loc2 (P : Store.store -> @Context.result X -> Prop),
