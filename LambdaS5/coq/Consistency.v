@@ -1248,10 +1248,12 @@ Proof.
 Qed.
 
 
-Lemma monad_iseed_preserves_props :
-  forall X runs st st2 opt default (cont : Store.store -> Values.value_loc -> (Store.store * (@Context.result X))) res2 P,
+Lemma monad_iseed_for_locs_preserves_props :
+  forall runs st st2 opt default (cont : Store.store -> Values.value_loc -> (Store.store * (@Context.result Values.value_loc))) res2 (P : Store.store -> Context.result Values.value_loc -> Prop),
   runs_type_eval_preserves_all_locs_exist runs ->
   all_locs_exist st ->
+  (forall st' res', all_locs_exist st' /\ result_value_loc_exists ok_loc st' res' -> P st' res') ->
+  (forall st' res', P st' res' -> all_locs_exist st') ->
   (forall st0 loc0 st1 res,
     superstore st st0 ->
     all_locs_exist st0 ->
@@ -1384,12 +1386,20 @@ Proof.
   (* Unfold prototype_loc allocation. *)
   intro st1'_decl.
   assert (H: superstore st2 st1' /\ pred st1' res1).
-    eapply (monad_iseed_preserves_props Values.value_loc runs st2 st1'
+    eapply (monad_iseed_for_locs_preserves_props runs st2 st1'
            prototype_opt_expr proto_default_loc)
           with (res2:=res1) (P:=pred).
       apply runs_cstt.
 
       apply st2_cstt.
+
+      unfold pred.
+      trivial.
+
+      unfold pred.
+      trivial.
+
+      intuition.
 
       Focus 2.
       apply st1'_decl.
