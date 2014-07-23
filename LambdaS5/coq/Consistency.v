@@ -191,6 +191,16 @@ Proof.
   assumption.
 Qed.
 
+Lemma result_value_loc_exists_change_ok_fail :
+  forall X Y st v ok1 ok2,
+  result_value_loc_exists ok1 st (@Fail X v) ->
+  result_value_loc_exists ok2 st (@Fail Y v)
+.
+Proof.
+  intros X Y st v ok1 ok2 H.
+  apply result_value_loc_exists_fail.
+Qed.
+
 
 (* st2 is a superset of st. *)
 Definition superstore (st st2 : Store.store) :=
@@ -1281,13 +1291,61 @@ Lemma monad_ier_for_props_preserves_pred :
   (forall st' res', P st' res' -> all_locs_exist st') ->
   (forall st0 loc0 st1 res,
     superstore st st0 ->
-    all_locs_exist st0 /\ ok_loc st loc0 ->
+    all_locs_exist st0 /\ ok_loc st0 loc0 ->
     cont st0 loc0 = (st1, res) ->
     superstore st0 st1 /\ P st1 res) ->
   Monads.if_eval_return runs st e cont = (st2, props2) ->
   superstore st st2 /\ P st2 props2
 .
-Admitted.
+Proof.
+  intros runs st st2 e cont props2 P.
+  intros runs_cstt IH H_P H_P' cont_cstt H.
+  unfold Monads.if_eval_return in H.
+  apply monad_ec_preserves_pred with runs e
+  (fun (store : store) (res : result value_loc) =>
+       Monads.if_return store res (cont store));
+    try assumption.
+
+  intros st0 res0 st1 res1.
+  intros superstore_st_st0 IH' H'.
+  apply monad_ir_preserves_pred with res0 (cont st0); destruct IH' as (st0_cstt,res0_cstt);
+    try assumption.
+
+    intros v res0_def.
+    apply H_P.
+    split.
+      try apply st0_cstt.
+
+      apply result_value_loc_exists_change_ok_exception with Values.value_loc ok_loc.
+      rewrite <-res0_def.
+      apply res0_cstt.
+
+    intros b v res0_def.
+    apply H_P.
+    split.
+      try apply st0_cstt.
+
+      apply result_value_loc_exists_change_ok_break with Values.value_loc ok_loc b.
+      rewrite <-res0_def.
+      apply res0_cstt.
+
+    intros f res0_def.
+    apply H_P.
+    split.
+      try apply st0_cstt.
+
+      apply result_value_loc_exists_change_ok_fail with Values.value_loc ok_loc.
+      rewrite <-res0_def.
+      apply res0_cstt.
+
+
+    intros loc st3 res3 IH'' st3_decl.
+    apply cont_cstt with loc;
+      try assumption.
+
+      split;
+        assumption.
+Qed.
 
 Lemma monad_iseren_preserves_pred :
   forall runs st st2 opt (cont : Store.store -> option Values.value_loc -> (Store.store * Context.result Values.value_loc)) res2 (P : Store.store -> Context.result Values.value_loc -> Prop),
@@ -1467,13 +1525,14 @@ Proof.
           Focus 2.
           apply H'.
 
-          apply superstore_props_locs_exist with st.
-            assumption.
+          apply superstore_props_locs_exist with st0.
+            apply superstore_refl.
 
             apply props_locs_exist_write_data.
-            apply IH_h.
+              apply superstore_props_locs_exist with st;
+                assumption.
 
-            apply IH'.
+              apply IH'.
 
       destruct a.
       fold eval_object_properties_aux in H.
@@ -1530,11 +1589,9 @@ Proof.
                 apply superstore_st0_st3.
 
                 unfold superstore in superstore_st_st0.
-                apply superstore_st_st0.
                 apply IH'.
 
                 unfold superstore in superstore_st0_st3.
-                apply superstore_st0_st3.
                 apply IH''.
 Qed.
 
