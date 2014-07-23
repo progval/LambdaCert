@@ -1157,7 +1157,6 @@ Proof.
 
     intros st0 res0 st1 res1.
     intros superstore_st_st0 IH1 H1.
-    Check monad_ir_preserves_props_loc.
     eapply (monad_ir_preserves_pred X st0 st1 res0) with (res2:=res1) (P:=(P X)).
       apply IH1.
 
@@ -1222,7 +1221,6 @@ Proof.
 
     intros st0 res0 st1 res1.
     intros superstore_st_st0 IH1 H1.
-    Check monad_ir_preserves_pred.
     apply (monad_ir_preserves_pred Values.value_loc st0 st1 res0 (cont st0)
            res1
            (fun st res => all_locs_exist st /\ P st res)); try assumption.
@@ -1310,7 +1308,6 @@ Proof.
   intros runs st st2 opt cont res2 P runs_cstt st_cstt H_P H_P' H_cont H.
   unfold Monads.if_some_eval_return_else_none in H.
   destruct opt eqn:opt_def.
-    Check monad_ier_for_locs_preserves_pred.
     apply (monad_ier_for_locs_preserves_pred runs st st2 e
            (fun (ctx : store) (res : value_loc) => cont ctx (Some res))
            res2 P); try assumption.
@@ -1591,7 +1588,6 @@ Proof.
   unfold eval_object_decl in st0'_decl.
   destruct attrs as (primval_opt_expr,value_opt_expr,prototype_opt_expr,class,extensible).
   assert (H: superstore st0 st0' /\ pred st0' res0).
-    Check pred.
     eapply (monad_iseren_preserves_pred runs st0 st0' primval_opt_expr)
            with (res2:=res0) (P:=pred).
       apply runs_cstt.
