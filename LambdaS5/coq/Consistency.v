@@ -1252,6 +1252,7 @@ Lemma monad_iseed_for_locs_preserves_props :
   forall runs st st2 opt default (cont : Store.store -> Values.value_loc -> (Store.store * (@Context.result Values.value_loc))) res2 (P : Store.store -> Context.result Values.value_loc -> Prop),
   runs_type_eval_preserves_all_locs_exist runs ->
   all_locs_exist st ->
+  ok_loc st default ->
   (forall st' res', all_locs_exist st' /\ result_value_loc_exists ok_loc st' res' -> P st' res') ->
   (forall st' res', P st' res' -> all_locs_exist st') ->
   (forall st0 loc0 st1 res,
@@ -1263,7 +1264,24 @@ Lemma monad_iseed_for_locs_preserves_props :
   Monads.if_some_eval_else_default runs st opt default cont = (st2, res2) ->
   superstore st st2 /\ P st2 res2
 .
-Admitted.
+Proof.
+  intros runs st st2 oe default cont res2 P.
+  intros runs_cstt st_cstt ok_loc_default H_P H_P' cont_cstt H.
+  unfold Monads.if_some_eval_else_default in H.
+  destruct oe eqn:oe_def.
+    apply monad_ier_for_locs_preserves_props with runs e cont;
+      try assumption.
+    intros st0 loc0 st1 res1.
+    intros superstore_st_st0 IH st1_decl.
+    destruct IH.
+    apply cont_cstt with loc0;
+      assumption.
+
+    apply cont_cstt with default;
+      try assumption.
+
+      apply superstore_refl.
+Qed.
 
 (******** Consistency of evaluators ********)
 
@@ -1392,6 +1410,8 @@ Proof.
       apply runs_cstt.
 
       apply st2_cstt.
+
+      assumption.
 
       unfold pred.
       trivial.
