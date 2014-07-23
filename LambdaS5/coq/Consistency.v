@@ -612,27 +612,45 @@ Lemma add_value_return_preserves_all_locs_exist :
   forall (st st2: Store.store) res (v : Values.value),
   all_locs_exist st ->
   Context.add_value_return st v = (st2, res) ->
-  all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
+  superstore st st2 /\ all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
 .
 Proof.
   intros st st2 res v IH H.
   unfold add_value_return.
-  split.
     (* Store is consistent *)
     unfold add_value_return in H.
-    destruct res in H.
+    destruct res.
       (* Return *)
       assert (H_unpack: add_value st v = (st2, v0)).
         destruct (add_value st v) eqn:H'.
         inversion H.
         reflexivity.
 
-      eapply add_value_preserves_store_consistency.
-        apply IH.
-
+      split.
+        eapply add_value_makes_superstore.
         apply H_unpack.
 
+        split.
+          eapply add_value_preserves_store_consistency.
+            apply IH.
+
+            apply H_unpack.
+
+          apply result_value_loc_exists_return.
+          unfold add_value_return in H.
+
+          eapply add_value_returns_existing_value_loc.
+            apply IH.
+
+            apply H_unpack.
+
       (* Exception *)
+      assert (H_unpack: add_value st v = (st2, v0)).
+        destruct (add_value st v) eqn:H'.
+        inversion H.
+      split.
+        eapply add_value_makes_superstore.
+        apply H_unpack.
       destruct (add_value st v) in H.
       inversion H.
 
@@ -645,35 +663,6 @@ Proof.
       inversion H.
 
 
-    (* Returned location exists. *)
-    destruct res eqn:v0_def.
-      (* Return *)
-      apply result_value_loc_exists_return.
-      unfold add_value_return in H.
-      assert (H_unpack: add_value st v = (st2, v0)).
-        destruct (add_value st v) eqn:H'.
-        inversion H.
-        reflexivity.
-
-      eapply add_value_returns_existing_value_loc.
-        apply IH.
-
-        apply H_unpack.
-
-      (* Exception *)
-      unfold add_value_return in H.
-      destruct (add_value st v) in H.
-      inversion H.
-
-      (* Break *)
-      unfold add_value_return in H.
-      destruct (add_value st v) in H.
-      inversion H.
-
-      (* Fail *)
-      unfold add_value_return in H.
-      destruct (add_value st v) in H.
-      inversion H.
 Qed.
 
 Lemma add_object_makes_superstore :
@@ -1427,41 +1416,44 @@ Lemma eval_id_preserves_all_locs_exist :
   runs_type_eval_preserves_all_locs_exist runs ->
   all_locs_exist st ->
   Interpreter.eval_id runs st name = (st2, res) ->
-  all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
+  superstore st st2 /\ all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
 .
 Proof.
-  intros runs st name st2 res runs_cstt IH.
-  unfold eval_id.
+  intros runs st name st2 res runs_cstt IH H.
+  unfold eval_id in H.
   destruct (get_loc st name) as [l|l] eqn: l_def.
     (* If the name exists *)
-    split.
-      (* Store is unchanged, so it is still consistent. *)
-      inversion H as [(st2_def,res_def)].
-      rewrite <-st2_def.
-      apply IH.
+    split; inversion H as [(st2_def,res_def)].
+      apply superstore_refl.
 
-      (* Proof that we return an existing location. *)
-      inversion H as [(st2_def,res_def)].
-      apply result_value_loc_exists_return.
-      unfold all_locs_exist in IH.
-      destruct IH as (IH_val,IH_obj).
-      unfold all_locs_in_loc_heap_exist in IH_val.
-      rewrite <-st2_def.
-      apply (IH_val name).
-      rewrite Heap.binds_equiv_read_option.
-      unfold get_loc in l_def.
-      apply l_def.
+      split.
+        (* Store is unchanged, so it is still consistent. *)
+        rewrite <-st2_def.
+        apply IH.
+
+        (* Proof that we return an existing location. *)
+        apply result_value_loc_exists_return.
+        unfold all_locs_exist in IH.
+        destruct IH as (IH_val,IH_obj).
+        unfold all_locs_in_loc_heap_exist in IH_val.
+        rewrite <-st2_def.
+        apply (IH_val name).
+        rewrite Heap.binds_equiv_read_option.
+        unfold get_loc in l_def.
+        apply l_def.
 
     (* If the name does not exist. *)
-    split.
-      (* Store is unchanged. *)
-      inversion H as [(st2_def,res_def)].
-      rewrite <-st2_def.
-      apply IH.
+    split; inversion H as [(st2_def,res_def)].
+      apply superstore_refl.
 
-      (* We are not returning a location, it this is consistent. *)
-      inversion H.
-      apply result_value_loc_exists_fail.
+      split.
+        (* Store is unchanged. *)
+        rewrite <-st2_def.
+        apply IH.
+
+        (* We are not returning a location, it this is consistent. *)
+        inversion H.
+        apply result_value_loc_exists_fail.
 Qed.
 
 Lemma eval_object_properties_preserves_ok_loc_aux_aux :
@@ -1897,7 +1889,7 @@ Lemma not_implemented_preserves_all_locs_exist :
   forall st0 st2 res,
   all_locs_exist st0 ->
   (st0, Fail value_loc "GetAttr not implemented.") = (st2, res) ->
-  all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
+  superstore st0 st2 /\ all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
 .
 Proof.
   intros st0 st2 res IH.
@@ -1905,9 +1897,12 @@ Proof.
   inversion st2_decl as [(st2_def, res_def)].
   rewrite <-st2_def.
   split.
-    apply IH.
+    apply superstore_refl.
 
-    apply result_value_loc_exists_fail.
+    split.
+      apply IH.
+
+      apply result_value_loc_exists_fail.
 Qed.
 
 
@@ -1917,7 +1912,7 @@ Theorem eval_preserves_all_locs_exist :
   runs_type_eval_preserves_all_locs_exist runs ->
   all_locs_exist st ->
   Interpreter.eval runs st e = (st2, res) ->
-  all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
+  superstore st st2 /\ all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
 .
 Proof.
   intros runs st st2 res st0 e IH H.
