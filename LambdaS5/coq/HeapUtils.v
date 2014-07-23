@@ -3,7 +3,7 @@ Require Import LibHeap.
 Require Import LibTactics.
 Require Import LibReflect.
 
-Module Heap := HeapGen (LibHeap.HeapList).
+Module Heap := LibHeap.HeapList.
 
 Lemma write_preserves_indom : forall (X Y : Type) (h : Heap.heap X Y) k k0 v0,
   LibReflect.Comparable X -> Heap.indom h k -> Heap.indom (Heap.write h k0 v0) k

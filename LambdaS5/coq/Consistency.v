@@ -71,6 +71,71 @@ Definition props_locs_exist (st : Store.store) (props : Values.object_properties
   attrs_locs_exist st v
 .
 
+Lemma props_locs_exist_write_data :
+  forall st h k v w e c,
+  props_locs_exist st h ->
+  ok_loc st v ->
+  props_locs_exist st
+    (Utils.Heap.write h k
+       (attributes_data_of
+          {|
+          attributes_data_value := v;
+          attributes_data_writable := w;
+          attributes_data_enumerable := e;
+          attributes_data_configurable := c |}))
+.
+Proof.
+  intros st h k v w e c IH H.
+  unfold props_locs_exist.
+  intros k1 props1.
+  intro binds_k1_props1.
+  apply Heap.binds_write_inv in binds_k1_props1.
+  destruct binds_k1_props1 as [binds_k1_props1|binds_k1_props1].
+    destruct binds_k1_props1 as (k1_eq_k,props1_def).
+    rewrite props1_def.
+    apply attrs_locs_exist_data.
+    simpl.
+    apply H.
+
+    destruct binds_k1_props1 as (k1_neq_k,binds_k1_props1).
+    unfold props_locs_exist in IH.
+    apply IH with k1.
+    apply binds_k1_props1.
+Qed.
+
+Lemma props_locs_exist_write_accessor :
+  forall st h k g s e c,
+  props_locs_exist st h ->
+  ok_loc st g ->
+  ok_loc st s ->
+  props_locs_exist st
+    (Utils.Heap.write h k
+       (attributes_accessor_of
+          {|
+          attributes_accessor_get := g;
+          attributes_accessor_set := s;
+          attributes_accessor_enumerable := e;
+          attributes_accessor_configurable := c |}))
+.
+Proof.
+  intros st h k g s e c IH H_g H_s.
+  unfold props_locs_exist.
+  intros k1 props1.
+  intro binds_k1_props1.
+  apply Heap.binds_write_inv in binds_k1_props1.
+  destruct binds_k1_props1 as [binds_k1_props1|binds_k1_props1].
+    destruct binds_k1_props1 as (k1_eq_k,props1_def).
+    rewrite props1_def.
+    apply attrs_locs_exist_accessor;
+      simpl;
+      assumption.
+
+    destruct binds_k1_props1 as (k1_neq_k,binds_k1_props1).
+    unfold props_locs_exist in IH.
+    apply IH with k1.
+    apply binds_k1_props1.
+Qed.
+
 Definition object_locs_exist (st : Store.store) (obj : Values.object) :=
   forall proto_loc class extensible primval_opt_loc props code_opt_loc,
   obj = object_intro proto_loc class extensible primval_opt_loc props code_opt_loc ->
@@ -808,7 +873,7 @@ Proof.
         apply s_decl.
 
         apply H.
-        
+
       unfold runs_type_eval_preserves_all_locs_exist in runs_cstt.
       apply (cont_consistant s r st2 res2).
         apply (runs_cstt st e s r).
@@ -1218,7 +1283,7 @@ Lemma monad_ier_for_props_preserves_pred :
   (forall st' res', P st' res' -> all_locs_exist st') ->
   (forall st0 loc0 st1 res,
     superstore st st0 ->
-    all_locs_exist st0 /\ ok_loc st0 loc0 ->
+    all_locs_exist st0 /\ ok_loc st loc0 ->
     cont st0 loc0 = (st1, res) ->
     superstore st0 st1 /\ P st1 res) ->
   Monads.if_eval_return runs st e cont = (st2, props2) ->
@@ -1348,9 +1413,10 @@ Lemma eval_object_properties_preserves_ok_loc_aux_aux :
   forall runs props st st2 props2 h,
   runs_type_eval_preserves_all_locs_exist runs ->
   all_locs_exist st ->
+  props_locs_exist st h ->
   eval_object_properties_aux runs st props h =
     (st2, props2) ->
-  superstore st st2 /\ all_locs_exist st2
+  superstore st st2 /\ all_locs_exist st2 /\ result_value_loc_exists props_locs_exist st2 props2
 .
 Proof.
   Definition pred2 runs st props props2 h s w e c st2 v :=
@@ -1364,29 +1430,32 @@ Proof.
   .
   intros runs props.
   induction props. (* TODO: no automatic naming. *)
-    intros st st2 props2 h runs_cstt IH H.
+    intros st st2 props2 h runs_cstt IH_st IH_h H.
     unfold eval_object_properties_aux in H.
     inversion H as [(st2_def,props_def)].
     rewrite <-st2_def.
     split.
       apply superstore_refl.
 
-      apply IH.
+      split.
+        apply IH_st.
 
-    intros st st2 props2 h runs_cstt IH H.
+        apply result_value_loc_exists_return.
+        apply IH_h.
+
+
+    intros st st2 props2 h runs_cstt IH_st IH_h H.
     unfold eval_object_properties_aux in H.
     destruct a. (* TODO: no automatic naming. *)
     destruct p. (* TODO: no automatic naming. *)
       destruct d.
       fold eval_object_properties_aux in H.
-      Check monad_ier_for_props_preserves_pred.
       eapply (monad_ier_for_props_preserves_pred runs st st2 e) with
-      (props2:=props2) (P:=(fun s p => all_locs_exist s));
-        try assumption.
+      (props2:=props2) (P:=(fun s p => all_locs_exist s /\ result_value_loc_exists props_locs_exist s p));
+        try assumption;
+        try trivial.
 
         intuition.
-
-        trivial.
 
         Focus 2.
         apply H.
@@ -1398,19 +1467,28 @@ Proof.
 
           apply IH'.
 
+          Focus 2.
           apply H'.
 
+          apply superstore_props_locs_exist with st.
+            assumption.
+
+            apply props_locs_exist_write_data.
+            apply IH_h.
+
+            apply IH'.
 
       destruct a.
       fold eval_object_properties_aux in H.
-      Check monad_ier_for_props_preserves_pred.
       eapply (monad_ier_for_props_preserves_pred runs st st2 e) with
-      (props2:=props2) (P:=(fun s p => all_locs_exist s));
+      (props2:=props2) (P:=(fun s p => all_locs_exist s /\ result_value_loc_exists props_locs_exist s p));
         try assumption.
 
         intuition.
 
         trivial.
+
+        intuition.
 
         Focus 2.
         apply H.
@@ -1419,7 +1497,7 @@ Proof.
         simpl in H'.
 
           eapply (monad_ier_for_props_preserves_pred runs st0 st1 e0) with
-          (props2:=props3) (P:=(fun s p => all_locs_exist s));
+          (props2:=props3) (P:=(fun s p => all_locs_exist s /\ result_value_loc_exists props_locs_exist s p));
             try assumption.
 
             intuition.
@@ -1438,10 +1516,29 @@ Proof.
               apply IH''.
 
               Focus 2.
-              apply H'.
-
               simpl in H''.
               apply H''.
+
+              Focus 2.
+              apply H'.
+
+              apply props_locs_exist_write_accessor.
+
+                apply superstore_props_locs_exist with st0.
+                  apply superstore_st0_st3.
+
+                  apply superstore_props_locs_exist with st; assumption.
+
+                unfold superstore in superstore_st0_st3.
+                apply superstore_st0_st3.
+
+                unfold superstore in superstore_st_st0.
+                apply superstore_st_st0.
+                apply IH'.
+
+                unfold superstore in superstore_st0_st3.
+                apply superstore_st0_st3.
+                apply IH''.
 Qed.
 
 Lemma eval_object_properties_makes_superstore :
@@ -1449,25 +1546,22 @@ Lemma eval_object_properties_makes_superstore :
   runs_type_eval_preserves_all_locs_exist runs ->
   all_locs_exist st ->
   eval_object_properties runs st props = (st2, props2) ->
-  superstore st st2 /\ all_locs_exist st2
+  superstore st st2 /\ all_locs_exist st2 /\ result_value_loc_exists props_locs_exist st2 props2
 .
 Proof.
   intros runs st st2 props props2.
   intros runs_cstt IH H.
   unfold eval_object_properties in H.
-  eapply (eval_object_properties_preserves_ok_loc_aux_aux runs);
+  apply (eval_object_properties_preserves_ok_loc_aux_aux runs) with props Heap.empty;
     try assumption.
 
-    apply H.
+    unfold props_locs_exist.
+    intros k v H_absurd.
+    false.
+    eapply LibHeap.not_binds_empty.
+    apply H_absurd.
 Qed.
 
-Lemma eval_object_properties_preserves_ok_loc_option :
-  forall runs st st2 props props2 loc,
-  ok_loc_option st loc ->
-  eval_object_properties runs st props = (st2, props2) ->
-  ok_loc_option st2 loc
-.
-Admitted.
 
 Lemma eval_object_properties_preserves_all_locs_exist :
   forall runs st st2 props props2,
@@ -1478,17 +1572,9 @@ Lemma eval_object_properties_preserves_all_locs_exist :
 .
 Proof.
   intros runs st st2 props props2 runs_cstt IH H.
-  assert (t: superstore st st2 /\ all_locs_exist st2).
-    apply eval_object_properties_makes_superstore with runs props props2;
+  apply eval_object_properties_makes_superstore with runs props;
     assumption.
-
-  split.
-    apply t.
-    
-    split.
-      apply t.
-
-Admitted.
+Qed.
 
 Lemma eval_objectdecl_preserves_all_locs_exist :
   forall runs st st2 attrs props res,
@@ -1665,8 +1751,8 @@ Proof.
         apply st5_cstt.
 
         apply result_value_loc_exists_fail.
-    
-  (* Unfold object allocation. *) 
+
+  (* Unfold object allocation. *)
   simpl.
   intros props0 st6 res6.
   intros props0_cstt H.
@@ -1708,7 +1794,7 @@ Proof.
           assumption.
 
           split.
-            apply superstore_ok_loc_option with st4. 
+            apply superstore_ok_loc_option with st4.
               apply superstore_st4_st5.
             apply superstore_ok_loc_option with st3.
               apply superstore_st3_st4.
@@ -1716,10 +1802,10 @@ Proof.
               apply superstore_st2_st3.
             apply superstore_ok_loc_option with st1.
               apply superstore_st1_st2.
-            apply primval_opt_val_in_st1.            
+            apply primval_opt_val_in_st1.
 
             split.
-              apply superstore_ok_loc_option with st4. 
+              apply superstore_ok_loc_option with st4.
                 apply superstore_st4_st5.
               apply object_code_loc_in_st4.
 
