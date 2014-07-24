@@ -54,7 +54,8 @@ if LJS_BIN:
 successes = []
 fails = []
 skipped = []
-for (env, ljs_bin, test) in tests:
+def run_test(env, ljs_bin, test):
+    global successes, fails, skipped
     in_ = test + '.in.ljs'
     out = test + '.out.ljs'
     skip = test + '.skip'
@@ -64,12 +65,16 @@ for (env, ljs_bin, test) in tests:
         with open(skip) as fd:
             skipped.append((test, fd.read()))
         print('skipped.')
-        continue
+        return
     if env:
         command = [EXE, '-load', env]
     else:
         command = [EXE]
     if ljs_bin:
+        if 'eval' in test.rsplit('/', 1)[-1].split('.', 1)[0].split('-'):
+            skipped.append((test, 'Requires eval'))
+            print('skipped')
+            return
         with tempfile.TemporaryFile() as desugared:
             subprocess.call([ljs_bin, '-desugar', test, '-print-src'], stdout=desugared)
             desugared.seek(0)
@@ -87,7 +92,7 @@ for (env, ljs_bin, test) in tests:
                     output = subprocess.check_output(command + ['stdin'], stdin=in_fd)
             except subprocess.CalledProcessError:
                 fails.append(test)
-                continue
+                return
         with tempfile.TemporaryFile() as out_fd:
             out_fd.write(output)
             out_fd.seek(0)
@@ -97,14 +102,19 @@ for (env, ljs_bin, test) in tests:
                 successes.append(test)
                 print('ok.')
 
-print('Result:')
-print('\t%d successed' % len(successes))
-print('\t%d skipped:' % len(skipped))
-for (test, msg) in skipped:
-    print('\t\t%s: %s' % (test, msg))
-print('\t%d failed:' % len(fails))
-for fail in fails:
-    print('\t\t%s' % fail)
+try:
+    for (env, ljs_bin, test) in tests:
+        run_test(env, ljs_bin, test)
+finally:
+    print('')
+    print('Result:')
+    print('\t%d successed' % len(successes))
+    print('\t%d skipped:' % len(skipped))
+    for (test, msg) in skipped:
+        print('\t\t%s: %s' % (test, msg))
+    print('\t%d failed:' % len(fails))
+    for fail in fails:
+        print('\t\t%s' % fail)
 if fails:
    exit(1)
 else:
