@@ -2400,14 +2400,15 @@ Qed.
 Theorem eval_preserves_all_locs_exist :
   forall runs (st st2 : Store.store) res,
   forall (e : Syntax.expression),
-  runs_type_eval_preserves_all_locs_exist runs ->
+  runs_preserves_all_locs_exist runs ->
   all_locs_exist st ->
   Interpreter.eval runs st e = (st2, res) ->
   superstore st st2 /\ all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
 .
 Proof.
-  intros runs st st2 res e runs_eval_cstt H.
-  unfold runs_preserves_all_locs_exist in runs_eval_cstt.
+  intros runs st st2 res e runs_cstt H.
+  unfold runs_preserves_all_locs_exist in runs_cstt.
+  destruct runs_cstt as (runs_eval_cstt, (runs_get_closure_cstt, runs_get_property_cstt)).
   destruct e; unfold eval; simpl;
     (* Null, Undefined, String, Number, True, False. *)
     try solve [apply add_value_return_preserves_all_locs_exist; apply H].
@@ -2427,41 +2428,117 @@ Admitted.
 
 Theorem runs_eval_preserves_all_locs_exist :
   forall max_steps (st : Store.store),
-  forall (e : Syntax.expression) st2 res,
+  forall (e : Syntax.expression) v n st2,
   all_locs_exist st ->
-  Interpreter.runs_eval max_steps st e = (st2, res) ->
-  superstore st st2 /\ all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
+  (forall res,
+   Interpreter.runs_eval max_steps st e = (st2, res) ->
+   superstore st st2 /\ all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res) /\
+  (forall res,
+   Interpreter.runs_get_closure max_steps st v = (st2, res) ->
+   superstore st st2 /\ all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res) /\
+  (forall res,
+   Interpreter.runs_get_property max_steps st (v, n) = (st2, res) ->
+   superstore st st2 /\ all_locs_exist st2 /\ result_value_loc_exists ok_opt_attributes st2 res)
 .
 Proof.
   intros max_steps.
   induction max_steps. (* TODO: no automatic naming *)
-    intros st e st2 res st_cstt H.
-    unfold runs in H.
-    inversion H as [(st_eq, res_def)].
-      split.
-        apply superstore_refl.
-
+    intros st e v n st2 st_cstt.
+    split.
+      intros res H.
+      unfold runs_eval in H.
+      unfold runs in H.
+      inversion H as [(st_eq, res_def)].
         split.
-          rewrite <-st_eq.
+          apply superstore_refl.
+
+          split.
+            rewrite <-st_eq.
+            apply st_cstt.
+
+            apply result_value_loc_exists_fail.
+
+      split;
+        intros res H;
+        unfold runs_eval in H;
+        unfold runs in H;
+        inversion H as [(st_eq, res_def)].
+          split.
+            apply superstore_refl.
+
+            split.
+              rewrite <-st_eq.
+              apply st_cstt.
+
+              apply result_value_loc_exists_fail.
+
+          split.
+            apply superstore_refl.
+
+            split.
+              rewrite <-st_eq.
+              apply st_cstt.
+
+              apply result_value_loc_exists_fail.
+
+    intros st e v n st2 st_cstt.
+    split.
+      intros res H.
+      unfold runs_eval in H.
+      unfold runs in H.
+      eapply eval_preserves_all_locs_exist.
+        Focus 2.
+        apply st_cstt.
+
+        Focus 2.
+        apply H.
+
+        unfold runs_preserves_all_locs_exist.
+        split.
+          unfold runs_type_eval_preserves_all_locs_exist.
+          simpl.
+          intros st0 e0 st1 res1 H'.
+          apply IHmax_steps;
+            assumption.
+
+          split.
+            unfold runs_type_get_closure_preserves_all_locs_exist.
+            simpl.
+            intros st0 e0 st1 res1 st0_cstt H'.
+            apply IHmax_steps with e0;
+              assumption.
+
+            unfold runs_type_get_closure_preserves_all_locs_exist.
+            simpl.
+            intros st0 e0 st1 res1 st0_cstt H'.
+            edestruct IHmax_steps as (_, (_, foo)).
+              apply st_cstt.
+
+              apply foo.
+              assumption.
+
+        unfold runs in H.
+        eapply eval_preserves_all_locs_exist.
+          Focus 2.
           apply st_cstt.
 
-          apply result_value_loc_exists_fail.
+          Focus 2.
+          apply H.
 
-    intros st e st2 res st_cstt H.
-    unfold runs_eval in H.
-    unfold runs in H.
-    eapply eval_preserves_all_locs_exist.
-      Focus 2.
-      apply st_cstt.
+          unfold runs_preserves_all_locs_exist.
+          split.
+            unfold runs_type_eval_preserves_all_locs_exist.
+            simpl.
+            intros st0 e0 st1 res1 H'.
+            apply IHmax_steps;
+              assumption.
 
-      Focus 2.
-      apply H.
-
-      unfold runs_type_eval_preserves_all_locs_exist.
-      simpl.
-      intros st0 e0 st1 res1 H'.
-      apply IHmax_steps.
-      apply H'.
+            split.
+              unfold runs_type_get_closure_preserves_all_locs_exist.
+              simpl.
+              intros st0 e0 st1 res1 st0_cstt H'.
+              apply IHmax_steps with e0;
+                assumption.
 Qed.
 
 Theorem get_closure_preserves_all_locs_exist :
@@ -2484,7 +2561,7 @@ Theorem runs_get_closure_preserves_all_locs_exist :
 Proof.
   intros max_steps.
   induction max_steps. (* TODO: no automatic naming *)
-    intros st v st2 res st_cstt H.
+    intros st e st2 res st_cstt H.
     unfold runs in H.
     inversion H as [(st_eq, res_def)].
       split.
@@ -2513,16 +2590,6 @@ Proof.
       apply H'.
 Qed.
 
-Theorem get_property_preserves_all_locs_exist :
-  forall runs (st st2 : Store.store) res,
-  forall (v : Values.value_loc) (n : Values.prop_name),
-  runs_type_get_property_preserves_all_locs_exist runs ->
-  all_locs_exist st ->
-  Interpreter.get_property runs st (v, n) = (st2, res) ->
-  superstore st st2 /\ all_locs_exist st2 /\ result_value_loc_exists ok_opt_attributes st2 res
-.
-Admitted.
-
 Theorem runs_get_property_preserves_all_locs_exist :
   forall max_steps (st : Store.store),
   forall (v : Values.value_loc) (n : Values.prop_name) st2 res,
@@ -2531,35 +2598,4 @@ Theorem runs_get_property_preserves_all_locs_exist :
   superstore st st2 /\ all_locs_exist st2 /\
   result_value_loc_exists ok_opt_attributes st2 res
 .
-Proof.
-  intros max_steps.
-  induction max_steps. (* TODO: no automatic naming *)
-    intros st v n st2 res st_cstt H.
-    unfold runs in H.
-    inversion H as [(st_eq, res_def)].
-      split.
-        apply superstore_refl.
-
-        split.
-          rewrite <-st_eq.
-          apply st_cstt.
-
-          apply result_value_loc_exists_fail.
-
-    intros st e st2 res st_cstt H.
-    unfold runs_get_property in H.
-    unfold runs in H.
-    eapply get_property_preserves_all_locs_exist.
-
-      Focus 2.
-      apply H.
-
-      unfold runs_type_get_property_preserves_all_locs_exist.
-      simpl.
-      intros st0 v_n st1 res1 st0_cstt H'.
-      destruct v_n as (v,n).
-      apply IHmax_steps with v n.
-        apply st0_cstt.
-
-        apply H'.
-Qed.
+Admitted.
