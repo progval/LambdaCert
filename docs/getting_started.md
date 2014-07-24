@@ -77,21 +77,15 @@ We will use a patched version of LambdaS5 (you can see my patches
 [here](https://github.com/brownplt/LambdaS5/pulls/ProgVal) and
 [here](https://github.com/brownplt/LambdaS5/pulls/ProgVal?state=closed))
 
-First, get the source code (about 66MB):
+First, get the source code (about 66MB) and compile it:
 
 ```
 cd ~/js/
 git clone https://github.com/ProgVal/LambdaS5.git
 cd LambdaS5/
 git checkout working
-```
-
-Then, you can compile LambdaS5:
-
-```
-cd ..
+cd src/
 make
-cd ..
 ```
 
 You now have to make LambdaS5 aware of a path where it can find SpiderMonkey.
