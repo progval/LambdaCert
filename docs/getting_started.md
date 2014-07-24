@@ -200,3 +200,11 @@ make snapshot
 ./build/eval.native -load tests/es5.dump /tmp/hello.ljs
 ./build/eval.native -load tests/es5.dump /tmp/hello.ljs
 ```
+
+Finally, you can run LambdaCert’s tests:
+
+```
+make quicktests # For language tests
+make tests # For language + env tests
+./tests/run_tests.py tests/es5.dump ~/js/LambdaS5/obj/s5.d.byte ~/js/LambdaS5/tests/unit-tests/
+```
