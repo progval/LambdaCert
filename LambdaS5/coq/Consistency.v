@@ -65,6 +65,13 @@ Proof.
   split; assumption.
 Qed.
 
+Definition ok_opt_attributes st attr_option : Prop :=
+  match attr_option with
+  | Some attr => attrs_locs_exist st attr
+  | None => Logic.True
+  end
+.
+
 Definition props_locs_exist (st : Store.store) (props : Values.object_properties) :=
   forall k v,
   Heap.binds props k v ->
@@ -210,6 +217,7 @@ Definition superstore (st st2 : Store.store) :=
 
 Definition runs_type_eval_preserves_all_locs_exist runs :=
   forall st e st2 res,
+  all_locs_exist st ->
   runs_type_eval runs st e = (st2, res) ->
   superstore st st2 /\ all_locs_exist st2 /\
   result_value_loc_exists ok_loc st2 res
@@ -1128,34 +1136,36 @@ Lemma monad_ec_preserves_pred :
   superstore st st2 /\ P st2 res2
 .
 Proof.
-  intros X runs st st2 e cont res2 P runs_cstt IH cont_consistant st2_decl.
+  intros X runs st st2 e cont res2 P runs_cstt st_cstt cont_consistant st2_decl.
   unfold Monads.eval_cont in st2_decl.
   destruct (runs_type_eval runs st e) eqn:s_decl.
   split.
     apply superstore_trans with s.
       unfold runs_type_eval_preserves_all_locs_exist in runs_cstt.
       forwards :runs_cstt.
+        apply st_cstt.
+
         apply s_decl.
 
         apply H.
 
       unfold runs_type_eval_preserves_all_locs_exist in runs_cstt.
       apply (cont_consistant s r st2 res2).
-        apply (runs_cstt st e s r).
-        apply s_decl.
+        apply (runs_cstt st e s r);
+          assumption.
 
-        apply (runs_cstt st e s r).
-        apply s_decl.
+        apply (runs_cstt st e s r);
+          assumption.
 
         apply st2_decl.
 
   apply (cont_consistant s r st2 res2).
-    apply (runs_cstt st e s r).
-    apply s_decl.
+    apply (runs_cstt st e s r);
+      assumption.
 
     unfold runs_type_eval_preserves_all_locs_exist in runs_cstt.
-    apply (runs_cstt st e s r).
-    apply s_decl.
+    apply (runs_cstt st e s r);
+      assumption.
 
     apply st2_decl.
 Qed.
@@ -2367,14 +2377,14 @@ Qed.
 
 Theorem eval_preserves_all_locs_exist :
   forall runs (st st2 : Store.store) res,
-  forall st (e : Syntax.expression),
+  forall (e : Syntax.expression),
   runs_type_eval_preserves_all_locs_exist runs ->
   all_locs_exist st ->
   Interpreter.eval runs st e = (st2, res) ->
   superstore st st2 /\ all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
 .
 Proof.
-  intros runs st st2 res st0 e IH H.
+  intros runs st st2 res e IH H.
   destruct e; unfold eval; simpl;
     (* Null, Undefined, String, Number, True, False. *)
     try solve [apply add_value_return_preserves_all_locs_exist; apply H].
@@ -2392,11 +2402,60 @@ Proof.
     applys* eval_setattr_preserves_all_locs_exist.
 Admitted.
 
-Theorem runs_preserves_all_locs_exist :
+Theorem runs_eval_preserves_all_locs_exist :
   forall max_steps (st : Store.store),
-  forall runner st (e : Syntax.expression),
+  forall (e : Syntax.expression) st2 res,
   all_locs_exist st ->
-  let (st2, res) := Interpreter.runs runner max_steps st e in
-  all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
+  Interpreter.runs_eval max_steps st e = (st2, res) ->
+  superstore st st2 /\ all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
+.
+Proof.
+  intros max_steps.
+  induction max_steps. (* TODO: no automatic naming *)
+    intros st e st2 res st_cstt H.
+    unfold runs in H.
+    inversion H as [(st_eq, res_def)].
+      split.
+        apply superstore_refl.
+
+        split.
+          rewrite <-st_eq.
+          apply st_cstt.
+
+          apply result_value_loc_exists_fail.
+
+    intros st e st2 res st_cstt H.
+    unfold runs_eval in H.
+    unfold runs in H.
+    eapply eval_preserves_all_locs_exist.
+      Focus 2.
+      apply st_cstt.
+
+      Focus 2.
+      apply H.
+
+      unfold runs_type_eval_preserves_all_locs_exist.
+      simpl.
+      intros st0 e0 st1 res1 H'.
+      apply IHmax_steps.
+      apply H'.
+Qed.
+
+Theorem runs_get_closure_preserves_all_locs_exist :
+  forall max_steps (st : Store.store),
+  forall (v : Values.value_loc) st2 res,
+  all_locs_exist st ->
+  Interpreter.runs_get_closure max_steps st v = (st2, res) ->
+  superstore st st2 /\ all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
+.
+Admitted.
+
+Theorem runs_get_property_preserves_all_locs_exist :
+  forall max_steps (st : Store.store),
+  forall (v : Values.value_loc) (n : Values.prop_name) st2 res,
+  all_locs_exist st ->
+  Interpreter.runs_get_property max_steps st (v, n) = (st2, res) ->
+  superstore st st2 /\ all_locs_exist st2 /\
+  result_value_loc_exists ok_opt_attributes st2 res
 .
 Admitted.
