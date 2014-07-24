@@ -144,6 +144,9 @@ Extract Constant JsNumber.neg => "(~-.)".
 Extract Constant JsNumber.sign => "(fun f -> float_of_int (compare f 0.))".
 Extract Constant JsNumber.number_comparable => "(fun n1 n2 -> 0 = compare n1 n2)".
 Extract Constant JsNumber.lt_bool => "(<)".
+Extract Constant Operators.le_bool => "(<=)".
+Extract Constant Operators.gt_bool => "(>)".
+Extract Constant Operators.ge_bool => "(>=)".
 
 Extract Constant JsNumber.to_int32 => 
 "fun n ->
@@ -215,6 +218,7 @@ Set Extraction AccessOpaque.
 Extract Constant Operators._number_eq_bool => "(=)".
 
 Extract Constant Operators._print_string => "fun x -> print_string (CoqUtils.implode x); print_char '\n'".
+Extract Constant Operators._pretty => "fun fuel store value -> print_string (PrettyPrint.string_of_value fuel store value); print_char '\n'".
 
 
 (* That would be more optimized than char lists...
