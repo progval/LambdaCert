@@ -123,6 +123,14 @@ Definition pretty runs store v :=
   (Context.add_value_return store Undefined)
 .
 
+Definition numstr_to_num store (v : Values.value) :=
+  match v with
+  | String "" => Context.add_value_return store (Number JsNumber.zero)
+  | String s => Context.add_value_return store (Number (JsNumber.from_string s))
+  | _ => (store, Fail value_loc "numstr_to_num got invalid value.")
+  end
+.
+
 Definition unary_arith store (op : number -> number) (v : Values.value) : (Store.store * Context.result Values.value_loc) :=
   match v with
   | Number n => Context.add_value_return store (Number (op n))
@@ -143,6 +151,7 @@ Definition unary (op : string) runs store v_loc : (Store.store * (@Context.resul
     | "prim->num" => prim_to_num store v
     | "prim->bool" => prim_to_bool store v
     | "!" => nnot store v
+    | "numstr->num" => numstr_to_num store v
     | _ => (store, Context.Fail Values.value_loc ("Unary operator " ++ op ++ " not implemented."))
     end
   )
