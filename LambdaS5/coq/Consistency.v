@@ -103,6 +103,7 @@ Proof.
     apply binds_k1_props1.
 Qed.
 
+
 Lemma props_locs_exist_write_accessor :
   forall st h k g s e c,
   props_locs_exist st h ->
@@ -255,6 +256,22 @@ Proof.
     apply IH.
 Qed.
 
+Lemma superstore_object_locs_exist :
+  forall st st2 obj,
+  superstore st st2 ->
+  object_locs_exist st obj ->
+  object_locs_exist st2 obj
+.
+Admitted.
+
+Lemma superstore_result_value_loc_exists :
+  forall st st2 res,
+  superstore st st2 ->
+  result_value_loc_exists ok_loc st res ->
+  result_value_loc_exists ok_loc st2 res
+.
+Admitted.
+
 Lemma fresh_loc_preserves_ok_loc :
   forall obj_heap val_heap loc_heap fresh_locs loc n,
   ok_loc (store_intro obj_heap val_heap loc_heap (LibStream.stream_intro n fresh_locs)) loc ->
@@ -295,6 +312,10 @@ Proof.
   apply H_1_2.
   apply H_1.
 Qed.
+
+Definition res_pred :=
+  fun st res => all_locs_exist st /\ result_value_loc_exists ok_loc st res
+.
 
 (******** Consistency of Store operations ********)
 
@@ -661,7 +682,252 @@ Proof.
       (* Fail *)
       destruct (add_value st v) in H.
       inversion H.
+Qed.
 
+Lemma obj_write_makes_superstore :
+  forall obj_heap val_heap loc_heap fresh_locs ptr obj2,
+  superstore
+  {|
+  object_heap := obj_heap;
+  value_heap := val_heap;
+  loc_heap := loc_heap;
+  fresh_locations := fresh_locs |}
+  {|
+  object_heap := Store.Heap.write obj_heap ptr obj2;
+  value_heap := val_heap;
+  loc_heap := loc_heap;
+  fresh_locations := fresh_locs |}
+.
+Admitted.
+
+Lemma obj_write_preserves_all_locs_exist :
+  forall obj_heap val_heap loc_heap fresh_locs ptr obj,
+  object_locs_exist {|
+    object_heap := obj_heap;
+    value_heap := val_heap;
+    loc_heap := loc_heap;
+    fresh_locations := fresh_locs |} obj ->
+  all_locs_exist
+    {|
+    object_heap := obj_heap;
+    value_heap := val_heap;
+    loc_heap := loc_heap;
+    fresh_locations := fresh_locs |} ->
+  all_locs_exist
+    {|
+    object_heap := Store.Heap.write obj_heap ptr obj;
+    value_heap := val_heap;
+    loc_heap := loc_heap;
+    fresh_locations := fresh_locs |}
+.
+Admitted.
+
+Lemma prop_write_preserves_object_locs_exist :
+  forall st fieldname prop proto class extensible prim_value props code,
+  attrs_locs_exist st prop ->
+  object_locs_exist st
+  {|
+  object_proto := proto;
+  object_class := class;
+  object_extensible := extensible;
+  object_prim_value := prim_value;
+  object_properties_ := props;
+  object_code := code |} ->
+  object_locs_exist st
+  {|
+  object_proto := proto;
+  object_class := class;
+  object_extensible := extensible;
+  object_prim_value := prim_value;
+  object_properties_ := Store.Heap.write props fieldname prop;
+  object_code := code |}
+.
+Admitted.
+
+Lemma get_object_preserves_all_locs_exist :
+  forall st ptr obj,
+  all_locs_exist st ->
+  get_object st ptr = Some obj ->
+  object_locs_exist st obj
+.
+Admitted.
+
+Lemma update_object_preserves_all_locs_exist :
+  forall st ptr pred st2 res2,
+  all_locs_exist st ->
+  (forall obj st'2 obj2 res,
+   object_locs_exist st obj ->
+   pred obj = (st'2, obj2, res) ->
+   superstore st st'2 /\ all_locs_exist st'2 /\
+   object_locs_exist st'2 obj2 /\ result_value_loc_exists ok_loc st'2 res) ->
+  update_object st ptr pred = (st2, res2) ->
+  superstore st st2 /\ all_locs_exist st2 /\
+  result_value_loc_exists ok_loc st2 res2
+.
+Proof.
+  intros st ptr pred st2 res2 st_cstt pred_cstt H.
+  unfold Context.update_object in H.
+  destruct (get_object st ptr) as [obj|_] eqn:obj_decl.
+    destruct (pred obj) as ((st',obj2),res) eqn:st'_decl.
+    unfold Store.update_object in H.
+    destruct st' eqn:st'_def.
+    inversion H as [(st2_def,res_eq)].
+    split.
+      apply superstore_trans with {|
+            object_heap := object_heap;
+            value_heap := value_heap;
+            loc_heap := loc_heap;
+            fresh_locations := fresh_locations |}.
+        apply pred_cstt with obj obj2 res.
+          apply get_object_preserves_all_locs_exist with ptr;
+            assumption.
+
+          apply st'_decl.
+
+        apply obj_write_makes_superstore.
+
+      split.
+        apply obj_write_preserves_all_locs_exist.
+          eapply pred_cstt with (obj:=obj) (obj2:=obj2).
+            apply get_object_preserves_all_locs_exist with ptr;
+              assumption.
+
+            apply st'_decl.
+
+        eapply pred_cstt with (obj:=obj) (st'2:={|
+          object_heap := object_heap;
+          value_heap := value_heap;
+          loc_heap := loc_heap;
+          fresh_locations := fresh_locations |}).
+          apply get_object_preserves_all_locs_exist with ptr;
+            assumption.
+
+          apply st'_decl.
+
+      apply superstore_result_value_loc_exists with st'.
+        rewrite st'_def.
+        apply obj_write_makes_superstore.
+      eapply pred_cstt with (obj:=obj) (st'2:=st').
+        apply get_object_preserves_all_locs_exist with ptr;
+          assumption.
+
+        rewrite <-st2_def.
+        rewrite st'_def.
+        rewrite <-res_eq.
+        apply st'_decl.
+
+  inversion H as [(st_eq, res2_def)].
+  split.
+    apply superstore_refl.
+
+    split.
+      rewrite <-st_eq.
+      apply st_cstt.
+
+      apply result_value_loc_exists_fail.
+Qed.
+
+Lemma get_object_property_preserves_all_locs_exist :
+  forall st obj fieldname prop,
+  all_locs_exist st ->
+  get_object_property obj fieldname = Some prop ->
+  attrs_locs_exist st prop
+.
+Admitted.
+
+Lemma update_object_property_preserves_all_locs_exist :
+  forall st ptr fieldname pred st2 res2,
+  all_locs_exist st ->
+  (forall oprop st'2 oprop2 res,
+   (forall prop : attributes, oprop = Some prop -> attrs_locs_exist st prop) ->
+   pred oprop = (st'2, oprop2, res) ->
+   superstore st st'2 /\ all_locs_exist st'2 /\
+   result_value_loc_exists ok_loc st'2 res /\
+   (forall prop2, oprop2 = Some prop2 -> attrs_locs_exist st'2 prop2)) ->
+  update_object_property st ptr fieldname pred = (st2, res2) ->
+  superstore st st2 /\ all_locs_exist st2 /\
+  result_value_loc_exists ok_loc st2 res2
+.
+Proof.
+  intros st ptr fieldname pred st2 res2 st_cstt pred_cstt H.
+  unfold update_object_property in H.
+  eapply update_object_preserves_all_locs_exist with (ptr:=ptr).
+    apply st_cstt.
+
+    Focus 2.
+    apply H.
+
+    clear H.
+    intros obj st' obj2 res.
+    simpl.
+    destruct obj eqn:obj_def.
+    destruct (pred
+       (get_object_property
+          {|
+          object_proto := object_proto;
+          object_class := object_class;
+          object_extensible := object_extensible;
+          object_prim_value := object_prim_value;
+          object_properties_ := object_properties_;
+          object_code := object_code |} fieldname)) as ((st'2,oprop),res') eqn:st'2_decl.
+    destruct oprop as [prop|_] eqn:prop_decl.
+    intros obj_cstt H.
+    inversion H as [(st'_eq,obj2_def,res_eq)].
+    rewrite <-st'_eq.
+    edestruct pred_cstt with (st'2:=st'2) (oprop2:=Some prop) (res:=res') as (superstore_st_st'2,(st'2_cstt,prop2_cstt)).
+      Focus 2.
+      apply st'2_decl.
+
+      intros prop0 prop0_decl.
+      eapply get_object_property_preserves_all_locs_exist.
+        apply st_cstt.
+
+        apply prop0_decl.
+
+    split.
+      assumption.
+
+      split.
+        assumption.
+
+        split.
+          apply prop_write_preserves_object_locs_exist.
+            apply prop2_cstt.
+            reflexivity.
+
+            apply superstore_object_locs_exist with st;
+              assumption.
+
+          rewrite <-res_eq.
+          apply prop2_cstt.
+
+    rewrite <-obj_def.
+    intros obj_cstt eq.
+    inversion eq as [(st'_eq, obj_eq, res_eq)].
+    rewrite <-st'_eq.
+    rewrite <-obj_eq.
+    rewrite <-res_eq.
+    edestruct pred_cstt with (st'2:=st'2) (res:=res') as (H0,(H1,(H2,H3))).
+      Focus 2.
+      apply st'2_decl.
+
+      intros prop H'.
+      eapply get_object_property_preserves_all_locs_exist.
+        apply st_cstt.
+
+        apply H'.
+
+    split.
+      assumption.
+
+      split.
+        assumption.
+
+        split.
+          apply superstore_object_locs_exist with st;
+            assumption.
+
+          assumption.
 
 Qed.
 
@@ -1409,6 +1675,73 @@ Proof.
       apply superstore_refl.
 Qed.
 
+Lemma monad_agop_preserves_pred :
+  forall X st loc (cont : Values.object_ptr -> (store * result X)),
+  forall st2 res2 (P : Store.store -> result X -> Prop),
+  all_locs_exist st ->
+  ok_loc st loc ->
+  (forall f, P st (Fail X f)) ->
+  (forall ptr st1 res1,
+    (* TODO: ok_ptr st ptr0 -> *)
+    cont ptr = (st1, res1) ->
+    superstore st st1 /\ P st1 res1) ->
+  @Monads.assert_get_object_ptr X st loc cont = (st2, res2) ->
+  superstore st st2 /\ P st2 res2
+.
+Proof.
+  intros X st loc cont st2 res2 P st_cstt loc_cstt H_fail cont_cstt H.
+  unfold Monads.assert_get_object_ptr in H.
+  destruct (get_value st loc) eqn:v_decl.
+    destruct v eqn:v_def; try solve [
+      inversion H as [(st_eq,res_eq)];
+      rewrite <-st_eq;
+      (split;
+        [apply superstore_refl
+        |apply H_fail])]. (* TODO: remove automatic naming *)
+      apply cont_cstt with o.
+      apply H.
+
+    inversion H as [(st_eq,res_eq)].
+    rewrite <-st_eq.
+    split.
+      apply superstore_refl.
+
+      apply H_fail.
+Qed.
+
+Lemma monad_ags_preserves_pred :
+  forall X st loc cont st2 res2 (P : Store.store -> result X -> Prop),
+  all_locs_exist st ->
+  ok_loc st loc ->
+  (forall f, P st (Fail X f)) ->
+  (forall ptr st1 res1,
+    (* TODO: ok_ptr st ptr0 -> *)
+    cont ptr = (st1, res1) ->
+    superstore st st1 /\ P st1 res1) ->
+  @Monads.assert_get_string X st loc cont = (st2, res2) ->
+  superstore st st2 /\ P st2 res2
+.
+Proof.
+  intros X st loc cont st2 res2 P st_cstt loc_cstt H_fail cont_cstt H.
+  unfold Monads.assert_get_string in H.
+  destruct (get_value st loc) eqn:v_decl.
+    destruct v eqn:v_def; try solve [
+      inversion H as [(st_eq,res_eq)];
+      rewrite <-st_eq;
+      (split;
+        [apply superstore_refl
+        |apply H_fail])]. (* TODO: remove automatic naming *)
+      apply cont_cstt with s.
+      apply H.
+
+    inversion H as [(st_eq,res_eq)].
+    rewrite <-st_eq.
+    split.
+      apply superstore_refl.
+
+      apply H_fail.
+Qed.
+
 (******** Consistency of evaluators ********)
 
 Lemma eval_id_preserves_all_locs_exist :
@@ -1630,23 +1963,21 @@ Lemma eval_objectdecl_preserves_all_locs_exist :
   superstore st st2 /\ all_locs_exist st2 /\ result_value_loc_exists ok_loc st2 res
 .
 Proof.
-  Definition pred := fun st res => all_locs_exist st /\ result_value_loc_exists ok_loc st res.
-
   (* Unfold primval_loc allocation. *)
   intros runs st0 st0' attrs props res0 runs_cstt st0_cstt st0'_decl.
   unfold eval_object_decl in st0'_decl.
   destruct attrs as (primval_opt_expr,value_opt_expr,prototype_opt_expr,class,extensible).
-  assert (H: superstore st0 st0' /\ pred st0' res0).
+  assert (H: superstore st0 st0' /\ res_pred st0' res0).
     eapply (monad_iseren_preserves_pred runs st0 st0' primval_opt_expr)
-           with (res2:=res0) (P:=pred).
+           with (res2:=res0) (P:=res_pred).
       apply runs_cstt.
 
       apply st0_cstt.
 
-      unfold pred.
+      unfold res_pred.
       trivial.
 
-      unfold pred.
+      unfold res_pred.
       intuition.
 
       Focus 2.
@@ -1673,20 +2004,20 @@ Proof.
 
   (* Unfold prototype_loc allocation. *)
   intro st1'_decl.
-  assert (H: superstore st2 st1' /\ pred st1' res1).
+  assert (H: superstore st2 st1' /\ res_pred st1' res1).
     eapply (monad_iseed_for_locs_preserves_pred runs st2 st1'
            prototype_opt_expr proto_default_loc)
-          with (res2:=res1) (P:=pred).
+          with (res2:=res1) (P:=res_pred).
       apply runs_cstt.
 
       apply st2_cstt.
 
       assumption.
 
-      unfold pred.
+      unfold res_pred.
       trivial.
 
-      unfold pred.
+      unfold res_pred.
       trivial.
 
       intuition.
@@ -1707,15 +2038,15 @@ Proof.
   intros superstore_st2_st3 st3_cstt prototype_loc_in_st3.
   simpl.
   eapply (monad_iseren_preserves_pred runs st3 st3' value_opt_expr)
-         with (res2:=res3) (P:=pred).
+         with (res2:=res3) (P:=res_pred).
     apply runs_cstt.
 
     apply st3_cstt.
 
-  unfold pred.
+  unfold res_pred.
   trivial.
 
-  unfold pred.
+  unfold res_pred.
   intuition.
 
   (* Unfold object_code_loc allocation. *)
@@ -1738,7 +2069,7 @@ Proof.
   intro st4'_decl.
   assert (H: superstore st5 st4' /\
   (forall v : object_properties,
-   props_locs_res = Return object_properties v -> pred st4' res4) /\
+   props_locs_res = Return object_properties v -> res_pred st4' res4) /\
   (forall v : value_loc,
    props_locs_res = Exception object_properties v ->
    res4 = Exception value_loc v) /\
@@ -1748,7 +2079,7 @@ Proof.
    props_locs_res = Fail object_properties f -> res4 = Fail value_loc f)).
     eapply (monad_ir_preserves_props Values.value_loc
            st5 st4' props_locs_res)
-          with (res2:=res4) (P:=pred).
+          with (res2:=res4) (P:=res_pred).
       apply st5_cstt.
 
       trivial.
@@ -1768,7 +2099,7 @@ Proof.
       apply H_ret with v'.
       reflexivity.
 
-      unfold pred.
+      unfold res_pred.
       unfold Monads.if_return in st4'_decl.
       inversion st4'_decl as [(st4'_def,res4_def)].
       rewrite <-st4'_def.
@@ -1778,7 +2109,7 @@ Proof.
         apply result_value_loc_exists_change_ok_exception with object_properties props_locs_exist.
         assumption.
 
-      unfold pred.
+      unfold res_pred.
       unfold Monads.if_return in st4'_decl.
       inversion st4'_decl as [(st4'_def,res4_def)].
       rewrite <-st4'_def.
@@ -1788,7 +2119,7 @@ Proof.
         apply result_value_loc_exists_change_ok_break with object_properties props_locs_exist b.
         assumption.
 
-      unfold pred.
+      unfold res_pred.
       unfold Monads.if_return in st4'_decl.
       inversion st4'_decl as [(st4'_def,res4_def)].
       rewrite <-st4'_def.
@@ -1818,7 +2149,7 @@ Proof.
       rewrite st6_def.
       apply superstore_refl.
 
-    unfold pred.
+    unfold res_pred.
     assert (obj_cstt: object_locs_exist st5 {|
              object_proto := prototype_loc;
              object_class := class;
@@ -1878,8 +2209,136 @@ Proof.
 
       apply H'.
 
-  unfold pred in H.
+  unfold res_pred in H.
   apply H.
+Qed.
+
+Lemma set_property_attribute_preserves_all_locs_exist :
+  forall st oprop attr newval_loc st2 oprop2 res,
+  all_locs_exist st ->
+  (forall prop, oprop = Some prop -> attrs_locs_exist st prop) ->
+  ok_loc st newval_loc ->
+  set_property_attribute st oprop attr newval_loc = (st2, oprop2, res) ->
+  superstore st st2 /\
+  all_locs_exist st2 /\
+  result_value_loc_exists ok_loc st2 res /\
+  (forall prop2 : attributes,
+   oprop2 = Some prop2 -> attrs_locs_exist st2 prop2)
+.
+Admitted.
+
+Lemma eval_setattr_preserves_all_locs_exist :
+  forall runs st st2 left_expr right_expr attr newval_expr res,
+  runs_type_eval_preserves_all_locs_exist runs ->
+  all_locs_exist st ->
+  Interpreter.eval_setattr runs st left_expr right_expr attr newval_expr = (st2, res) ->
+  superstore st st2 /\ res_pred st2 res
+.
+Proof.
+  intros runs st1 st1' left_expr right_expr attr newval_expr res1.
+  intros runs_cstt st_cstt H.
+  unfold eval_setattr in H.
+  
+  (* Unfold left_expr evaluation *)
+  eapply (monad_ier_for_locs_preserves_pred runs st1 st1' left_expr);
+    simpl; try solve [unfold res_pred; try assumption; try trivial].
+
+    unfold res_pred.
+    intuition.
+
+    Focus 2.
+    apply H.
+
+  clear H.
+  intros st2 left_loc st2' res2.
+  intros superstore_st1_st2 st2_left_loc_cstt H.
+  destruct st2_left_loc_cstt as (st2_cstt,left_loc_cstt).
+
+  (* Unfold right_expr evaluation *)
+  eapply (monad_ier_for_locs_preserves_pred runs st2 st2' right_expr);
+    simpl; try solve [unfold res_pred; try assumption; try trivial].
+
+    unfold res_pred.
+    intuition.
+
+    Focus 2.
+    apply H.
+
+  clear H.
+  intros st3 right_loc st3' res3.
+  intros superstore_st2_st3 st3_right_loc_cstt H.
+  destruct st3_right_loc_cstt as (st3_cstt,right_loc_cstt).
+
+  (* Unfold newval_expr evaluation *)
+  eapply (monad_ier_for_locs_preserves_pred runs st3 st3' newval_expr);
+    simpl; try solve [unfold res_pred; try assumption; try trivial].
+
+    unfold res_pred.
+    intuition.
+
+    Focus 2.
+    apply H.
+
+  clear H.
+  intros st4 newval_loc st4' res4.
+  intros superstore_st3_st4 st4_newval_loc_cstt H.
+  destruct st4_newval_loc_cstt as (st4_cstt,newval_loc_cstt).
+  simpl in H.
+
+  (* Get object_ptr *)
+  eapply (monad_agop_preserves_pred Values.value_loc st4 left_loc).
+    assumption.
+
+    unfold superstore in superstore_st3_st4.
+    apply superstore_st3_st4.
+    unfold superstore in superstore_st2_st3.
+    apply superstore_st2_st3.
+    apply left_loc_cstt.
+
+    unfold res_pred.
+    intro f.
+    split.
+      apply st4_cstt.
+
+      apply result_value_loc_exists_fail.
+
+    Focus 2.
+    apply H.
+
+  clear H.
+  intros ptr st5 res5.
+  simpl.
+
+  (* Get fieldname *)
+  apply monad_ags_preserves_pred.
+    assumption.
+
+    unfold superstore in superstore_st3_st4.
+    apply superstore_st3_st4.
+    apply right_loc_cstt.
+
+    unfold res_pred.
+    intro f.
+    split.
+      apply st4_cstt.
+
+      apply result_value_loc_exists_fail.
+
+  intros fieldname st6 res6 H.
+
+  (* Get oprop *)
+  unfold res_pred.
+  eapply update_object_property_preserves_all_locs_exist.
+    assumption.
+
+    Focus 2.
+    apply H.
+
+    simpl.
+    intros oprop st'2 oprop2 res H'.
+
+    apply set_property_attribute_preserves_all_locs_exist;
+      try assumption.
 Qed.
 
 
@@ -1928,6 +2387,9 @@ Proof.
 
     (* GetAttr *)
     applys* not_implemented_preserves_all_locs_exist.
+
+    (* SetAttr *)
+    applys* eval_setattr_preserves_all_locs_exist.
 Admitted.
 
 Theorem runs_preserves_all_locs_exist :
