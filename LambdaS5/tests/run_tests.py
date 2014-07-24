@@ -15,12 +15,20 @@ else:
     from cStringIO import StringIO as BytesIO
     imap = itertools.imap
 
-if len(sys.argv) == 2:
+LJS_BIN = None
+if len(sys.argv) == 4:
+    (prog, ES5_ENV, LJS_BIN, ljs_tests_dir) = sys.argv
+    ljs_tests = glob.glob(os.path.join(ljs_tests_dir, '*.js'))
+elif len(sys.argv) == 2:
     ES5_ENV = sys.argv[1]
 elif len(sys.argv) == 1:
     ES5_ENV = None
 else:
-    print('Syntax: %s <env dump>' % sys.argv[0])
+    prog = sys.argv[0]
+    print('Syntax: (any of the following)')
+    print('\t%s' % prog)
+    print('\t%s <env dump>' % prog)
+    print('\t%s <env dump> <lambdajs bin> <lambdajs tests dir>' % sys.argv[0])
     exit(2)
 
 TEST_DIR = os.path.dirname(__file__)
@@ -33,17 +41,20 @@ def list_ljs(dirname):
 def list_tests(dirname):
     return imap(strip_extension, list_ljs(dirname))
 
-tests = imap(lambda x:(None, x), list_tests('no-env'))
+tests = imap(lambda x:(None, None, x), list_tests('no-env'))
 
 if ES5_ENV:
     tests = itertools.chain(tests,
-        imap(lambda x:(ES5_ENV, x), list_tests('with-env')))
+        imap(lambda x:(ES5_ENV, None, x), list_tests('with-env')))
+if LJS_BIN:
+    tests = itertools.chain(tests,
+        imap(lambda x:(ES5_ENV, LJS_BIN, x), ljs_tests ))
 
 
 successes = []
 fails = []
 skipped = []
-for (env, test) in tests:
+for (env, ljs_bin, test) in tests:
     in_ = test + '.in.ljs'
     out = test + '.out.ljs'
     skip = test + '.skip'
@@ -58,20 +69,33 @@ for (env, test) in tests:
         command = [EXE, '-load', env]
     else:
         command = [EXE]
-    with open(in_) as in_fd:
-        try:
-            output = subprocess.check_output(command + ['stdin'], stdin=in_fd)
-        except subprocess.CalledProcessError:
-            fails.append(test)
-            continue
-    with tempfile.TemporaryFile() as out_fd:
-        out_fd.write(output)
-        out_fd.seek(0)
-        if subprocess.call(['diff', '-', out], stdin=out_fd):
-            fails.append(test)
-        else:
+    if ljs_bin:
+        with tempfile.TemporaryFile() as desugared:
+            subprocess.call([ljs_bin, '-desugar', test, '-print-src'], stdout=desugared)
+            desugared.seek(0)
+            output = subprocess.check_output(command + ['stdin'], stdin=desugared)
+        if 'passed' in output or 'Passed' in output:
             successes.append(test)
             print('ok.')
+        else:
+            print(output)
+            fails.append(test)
+        del desugared
+    else:
+        with open(in_) as in_fd:
+            try:
+                    output = subprocess.check_output(command + ['stdin'], stdin=in_fd)
+            except subprocess.CalledProcessError:
+                fails.append(test)
+                continue
+        with tempfile.TemporaryFile() as out_fd:
+            out_fd.write(output)
+            out_fd.seek(0)
+            if subprocess.call(['diff', '-', out], stdin=out_fd):
+                fails.append(test)
+            else:
+                successes.append(test)
+                print('ok.')
 
 print('Result:')
 print('\t%d successed' % len(successes))
