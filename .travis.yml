@@ -3,6 +3,10 @@ python:
     - "3.3"
 git:
     submodules: false
+cache:
+    apt: true
+    directories:
+    - .opam
 before_install:
     - sudo apt-get update
     - sudo apt-get install ocaml ocaml-native-compilers camlp4-extra libcoq-ocaml ocaml-base-nox ocaml-findlib
