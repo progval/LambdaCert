@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import os
 import sys
@@ -6,14 +6,13 @@ import glob
 import tempfile
 import itertools
 import subprocess
+from io import BytesIO
 
-# Hack to work with Python 2 and 3.
-if sys.version_info[0] >= 3:
-    from io import BytesIO
-    imap = map
-else:
-    from cStringIO import StringIO as BytesIO
-    imap = itertools.imap
+TIMEOUT = 240
+
+if sys.version_info < (3, 3, 0):
+    print('Python >= 3.3 is needed (subprocess timeout support).')
+    exit(3)
 
 LJS_BIN = None
 if len(sys.argv) == 4:
@@ -39,21 +38,22 @@ def strip_extension(filename):
 def list_ljs(dirname):
     return glob.glob(os.path.join(TEST_DIR, dirname, '*.in.ljs'))
 def list_tests(dirname):
-    return imap(strip_extension, list_ljs(dirname))
+    return map(strip_extension, list_ljs(dirname))
 
-tests = imap(lambda x:(None, None, x), list_tests('no-env'))
+tests = map(lambda x:(None, None, x), list_tests('no-env'))
 
 if ES5_ENV:
     tests = itertools.chain(tests,
-        imap(lambda x:(ES5_ENV, None, x), list_tests('with-env')))
+        map(lambda x:(ES5_ENV, None, x), list_tests('with-env')))
 if LJS_BIN:
     tests = itertools.chain(tests,
-        imap(lambda x:(ES5_ENV, LJS_BIN, x), ljs_tests ))
+        map(lambda x:(ES5_ENV, LJS_BIN, x), ljs_tests ))
 
 
 successes = []
 fails = []
 skipped = []
+timeout = []
 def run_test(env, ljs_bin, test):
     global successes, fails, skipped
     in_ = test + '.in.ljs'
@@ -78,7 +78,7 @@ def run_test(env, ljs_bin, test):
         with tempfile.TemporaryFile() as desugared:
             subprocess.call([ljs_bin, '-desugar', test, '-print-src'], stdout=desugared)
             desugared.seek(0)
-            output = subprocess.check_output(command + ['stdin'], stdin=desugared)
+            output = subprocess.check_output(command + ['stdin'], stdin=desugared, timeout=TIMEOUT)
         if 'passed' in output or 'Passed' in output:
             successes.append(test)
             print('ok.')
@@ -89,7 +89,8 @@ def run_test(env, ljs_bin, test):
     else:
         with open(in_) as in_fd:
             try:
-                    output = subprocess.check_output(command + ['stdin'], stdin=in_fd)
+                output = subprocess.check_output(command + ['stdin'],
+                        stdin=in_fd, timeout=TIMEOUT)
             except subprocess.CalledProcessError:
                 fails.append(test)
                 return
@@ -104,7 +105,11 @@ def run_test(env, ljs_bin, test):
 
 try:
     for (env, ljs_bin, test) in tests:
-        run_test(env, ljs_bin, test)
+        try:
+            run_test(env, ljs_bin, test)
+        except subprocess.TimeoutExpired:
+            print('timeout')
+            timeout.append(test)
 finally:
     print('')
     print('Result:')
@@ -112,6 +117,9 @@ finally:
     print('\t%d skipped:' % len(skipped))
     for (test, msg) in skipped:
         print('\t\t%s: %s' % (test, msg))
+    print('\t%d timed out:' % len(timeout))
+    for test in timeout:
+        print('\t\t%s' % test)
     print('\t%d failed:' % len(fails))
     for fail in fails:
         print('\t\t%s' % fail)

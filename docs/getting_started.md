@@ -48,7 +48,7 @@ On an up-to-date system, your default package manager and OPAM (the
 OCaml package manager) should be ok:
 
 ```
-sudo aptitude install autotools git subversion ocaml ocaml-native-compilers ocaml-findlib camlp4-extra opam coq coq-theories libcoq-ocaml m4 autoconf
+sudo aptitude install autotools git subversion ocaml ocaml-native-compilers ocaml-findlib camlp4-extra opam coq coq-theories libcoq-ocaml m4 autoconf python3
 OPAMYES=1 opam init
 OPAMYES=1 opam install xml-light bisect ocamlgraph
 eval `opam config env`
