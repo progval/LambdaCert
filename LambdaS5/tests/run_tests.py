@@ -79,6 +79,7 @@ def run_test(env, ljs_bin, test):
             subprocess.call([ljs_bin, '-desugar', test, '-print-src'], stdout=desugared)
             desugared.seek(0)
             output = subprocess.check_output(command + ['stdin'], stdin=desugared, timeout=TIMEOUT)
+        output = output.decode()
         if 'passed' in output or 'Passed' in output:
             successes.append(test)
             print('ok.')
