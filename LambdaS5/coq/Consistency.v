@@ -293,7 +293,29 @@ Lemma superstore_object_locs_exist :
   object_locs_exist st obj ->
   object_locs_exist st2 obj
 .
-Admitted.
+Proof.
+  intros st st2 obj superstore_st_st2.
+  unfold object_locs_exist.
+  intros H prot cl ext primval props code obj_def.
+  edestruct H as (H_prot, (H_primval, (H_code, H_props))).
+    apply obj_def.
+
+  split.
+    unfold superstore in superstore_st_st2.
+    apply superstore_st_st2.
+    assumption.
+
+    split.
+      apply superstore_ok_loc_option with st;
+        assumption.
+
+      split.
+        apply superstore_ok_loc_option with st;
+          assumption.
+
+        apply superstore_props_locs_exist with st;
+          assumption.
+Qed.
 
 Lemma superstore_result_value_loc_exists :
   forall st st2 res,
@@ -301,7 +323,17 @@ Lemma superstore_result_value_loc_exists :
   result_value_loc_exists ok_loc st res ->
   result_value_loc_exists ok_loc st2 res
 .
-Admitted.
+Proof.
+  intros st st2 res superstore_st_st2.
+  destruct res as [v|exc|b|f]; intro H; (* TODO: no auto-naming for break value. *)
+      try apply result_value_loc_exists_return;
+      try apply result_value_loc_exists_exception;
+      try apply result_value_loc_exists_break;
+      try apply result_value_loc_exists_fail;
+      apply superstore_st_st2;
+      inversion H;
+      assumption.
+Qed.
 
 Lemma fresh_loc_preserves_ok_loc :
   forall obj_heap val_heap loc_heap fresh_locs loc n,
@@ -716,7 +748,7 @@ Proof.
 Qed.
 
 Lemma obj_write_makes_superstore :
-  forall obj_heap val_heap loc_heap fresh_locs ptr obj2,
+  forall obj_heap val_heap loc_heap fresh_locs ptr obj,
   superstore
   {|
   object_heap := obj_heap;
@@ -724,12 +756,17 @@ Lemma obj_write_makes_superstore :
   loc_heap := loc_heap;
   fresh_locations := fresh_locs |}
   {|
-  object_heap := Store.Heap.write obj_heap ptr obj2;
+  object_heap := Store.Heap.write obj_heap ptr obj;
   value_heap := val_heap;
   loc_heap := loc_heap;
   fresh_locations := fresh_locs |}
 .
-Admitted.
+Proof.
+  unfold superstore.
+  unfold ok_loc.
+  simpl.
+  trivial.
+Qed.
 
 Lemma obj_write_preserves_all_locs_exist :
   forall obj_heap val_heap loc_heap fresh_locs ptr obj,
@@ -751,7 +788,64 @@ Lemma obj_write_preserves_all_locs_exist :
     loc_heap := loc_heap;
     fresh_locations := fresh_locs |}
 .
-Admitted.
+Proof.
+  unfold all_locs_exist.
+  unfold all_locs_in_loc_heap_exist.
+  unfold all_locs_in_obj_heap_exist.
+  simpl.
+  intros obj_heap val_heap loc_heap fresh_locs ptr0 obj0 obj_cstt H.
+  assert (H_superstore: superstore
+             {|
+             object_heap := obj_heap;
+             value_heap := val_heap;
+             loc_heap := loc_heap;
+             fresh_locations := fresh_locs |}
+             {|
+             object_heap := Store.Heap.write obj_heap ptr0 obj0;
+             value_heap := val_heap;
+             loc_heap := loc_heap;
+             fresh_locations := fresh_locs |}).
+    apply obj_write_makes_superstore.
+
+  split.
+    apply H.
+
+    intros ptr obj binds_ptr_obj.
+    assert (H_eq: (ptr=ptr0 /\ obj=obj0) \/ (ptr<>ptr0 /\ Heap.binds obj_heap ptr obj)).
+      apply Heap.binds_write_inv.
+      apply binds_ptr_obj.
+
+    destruct H_eq as [(ptr_eq,obj_eq)|(ptr_neq,binds'_ptr_obj)].
+      unfold object_locs_exist.
+      rewrite obj_eq.
+      unfold object_locs_exist in obj_cstt.
+      intros proto_loc class ext primval props code obj0_def.
+      split.
+        unfold superstore in H_superstore.
+        apply H_superstore.
+        apply (obj_cstt proto_loc class ext primval props code obj0_def).
+
+        split.
+          eapply superstore_ok_loc_option.
+            apply H_superstore.
+          apply (obj_cstt proto_loc class ext primval props code obj0_def).
+
+          split.
+            eapply superstore_ok_loc_option.
+              apply H_superstore.
+            apply (obj_cstt proto_loc class ext primval props code obj0_def).
+
+            eapply superstore_props_locs_exist.
+              apply H_superstore.
+            apply (obj_cstt proto_loc class ext primval props code obj0_def).
+
+      eapply superstore_object_locs_exist.
+        apply H_superstore.
+
+        destruct H as (H1, H2).
+        apply H2 with ptr.
+        apply binds'_ptr_obj.
+Qed.
 
 Lemma prop_write_preserves_object_locs_exist :
   forall st fieldname prop proto class extensible prim_value props code,
@@ -773,7 +867,43 @@ Lemma prop_write_preserves_object_locs_exist :
   object_properties_ := Store.Heap.write props fieldname prop;
   object_code := code |}
 .
-Admitted.
+Proof.
+  intros st fieldname prop proto class ext primval props code prop_cstt.
+  unfold object_locs_exist.
+  intros H.
+  intros proto' class' ext' primval' props' code'.
+  intros H'.
+  inversion H' as [(proto_eq, class_eq, ext_eq, primval_eq, props_def, code_eq)].
+  rewrite <-proto_eq.
+  rewrite <-primval_eq.
+  rewrite <-code_eq.
+  split.
+    apply (H proto class ext primval props code).
+    reflexivity.
+
+    split.
+      apply (H proto class ext primval props code).
+      reflexivity.
+
+      split.
+        apply (H proto class ext primval props code).
+        reflexivity.
+
+        unfold props_locs_exist.
+        unfold props_locs_exist in H.
+        intros name attrs binds_k_v.
+        assert (H_eq: (name=fieldname /\ attrs=prop) \/ (name<>fieldname /\ Heap.binds props name attrs)).
+          apply Heap.binds_write_inv.
+          apply binds_k_v.
+        destruct H_eq as [(name_eq,attrs_eq)|(name_neq,binds'_name_attrs)].
+          rewrite attrs_eq.
+          apply prop_cstt.
+
+        destruct (H proto class ext primval props code) as (_, (_, (_, H''))).
+          reflexivity.
+        apply H'' with name.
+        apply binds'_name_attrs.
+Qed.
 
 Lemma get_object_preserves_all_locs_exist :
   forall st ptr obj,
@@ -781,7 +911,16 @@ Lemma get_object_preserves_all_locs_exist :
   get_object st ptr = Some obj ->
   object_locs_exist st obj
 .
-Admitted.
+Proof.
+  intros st ptr obj st_cstt obj_def.
+  unfold all_locs_exist in st_cstt.
+  unfold all_locs_in_obj_heap_exist in st_cstt.
+  destruct st_cstt as (_, obj_cstt).
+  apply obj_cstt with ptr.
+  unfold get_object in obj_def.
+  rewrite Heap.binds_equiv_read_option.
+  apply obj_def.
+Qed.
 
 Lemma update_object_preserves_all_locs_exist :
   forall st ptr pred st2 res2,
