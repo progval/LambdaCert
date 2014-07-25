@@ -126,7 +126,7 @@ def test_wrapper(args):
         run_test(*args)
     except subprocess.TimeoutExpired:
         with output_lock:
-            print('timeout')
+            print('%s: timeout' % test)
         timeout.append(test)
     except Exception as e:
         stop = True
