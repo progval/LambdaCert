@@ -214,6 +214,7 @@ Set Extraction AccessOpaque.
 
 
 
+Extract Constant Operators._nat_of_float => "int_of_float".
 
 Extract Constant Operators._number_eq_bool => "(=)".
 

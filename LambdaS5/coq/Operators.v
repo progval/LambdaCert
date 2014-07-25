@@ -1,3 +1,4 @@
+Require Import LibInt.
 Require Import JsNumber.
 Require Import String.
 Require Import Store.
@@ -123,6 +124,13 @@ Definition pretty runs store v :=
   (Context.add_value_return store Undefined)
 .
 
+Definition strlen store v :=
+  match v with
+  | String s => add_value_return store (Number (JsNumber.of_int (String.length s)))
+  | _ => (store, Fail value_loc "strlen got non-string.")
+  end
+.
+
 Definition numstr_to_num store (v : Values.value) :=
   match v with
   | String "" => Context.add_value_return store (Number JsNumber.zero)
@@ -143,6 +151,7 @@ Definition unary (op : string) runs store v_loc : (Store.store * (@Context.resul
     match op with
     | "print" => print store v
     | "pretty" => pretty runs store v
+    | "strlen" => strlen store v
     | "typeof" => typeof store v
     | "abs" => unary_arith store JsNumber.absolute v
     | "void" => void store v
@@ -249,6 +258,19 @@ Definition string_plus store v1 v2 : (Store.store * Context.result Values.value_
   end
 .
 
+Parameter _nat_of_float : number -> nat.
+
+Definition char_at store v1 v2 :=
+  match (v1, v2) with
+  | (Values.String s, Number n) =>
+      match (String.get (_nat_of_float n) s) with
+      | Some char => add_value_return store (Values.String (String.String char String.EmptyString))
+      | None => (store, Fail Values.value_loc "char_at called with index larger than length.")
+      end
+  | _ => (store, Fail Values.value_loc "char_at called with wrong argument types.")
+  end
+.
+
 Definition arith store (op : number -> number -> number) (v1 v2 : Values.value) : (Store.store * Context.result Values.value_loc) :=
   match (v1, v2) with
   | (Number n1, Number n2) => Context.add_value_return store (Number (op n1 n2))
@@ -256,10 +278,13 @@ Definition arith store (op : number -> number -> number) (v1 v2 : Values.value) 
   end
 .
 
-Definition cmp store (op : number -> number -> bool) (v1 v2 : Values.value) : (Store.store * Context.result Values.value_loc) :=
+Definition cmp store undef_left undef_both undef_right (op : number -> number -> bool) (v1 v2 : Values.value) : (Store.store * Context.result Values.value_loc) :=
   match (v1, v2) with
   | (Number n1, Number n2) => Context.add_value_return store (if (op n1 n2) then True else False)
-  | _ => (store, Fail Values.value_loc "Comparison of non-numbers.")
+  | (Undefined, Number _) => Context.add_value_return store undef_left
+  | (Undefined, Undefined) => Context.add_value_return store undef_both
+  | (Number _, Undefined) => Context.add_value_return store undef_right
+  | _ => (store, Fail Values.value_loc "Comparison/order of non-numbers.")
   end
 .
 
@@ -277,14 +302,15 @@ Definition binary (op : string) runs store v1_loc v2_loc : (Store.store * (Conte
       | "*" => arith store JsNumber.mult v1 v2
       | "/" => arith store JsNumber.div v1 v2
       | "%" => arith store JsNumber.fmod v1 v2
-      | "<" => cmp store JsNumber.lt_bool v1 v2
-      | "<=" => cmp store le_bool v1 v2
-      | ">" => cmp store gt_bool v1 v2
-      | ">=" => cmp store ge_bool v1 v2
+      | "<" => cmp store True False False JsNumber.lt_bool v1 v2
+      | "<=" => cmp store True True False le_bool v1 v2
+      | ">" => cmp store False False True gt_bool v1 v2
+      | ">=" => cmp store False True True ge_bool v1 v2
       | "stx=" => stx_eq store v1 v2
       | "hasProperty" => has_property runs store v1_loc v2
       | "hasOwnProperty" => has_own_property store v1 v2
       | "string+" => string_plus store v1 v2
+      | "char-at" => char_at store v1 v2
       | "__prop->obj" => prop_to_obj store v1 v2 (* For debugging purposes *)
       | _ => (store, Context.Fail Values.value_loc ("Binary operator " ++ op ++ " not implemented."))
       end

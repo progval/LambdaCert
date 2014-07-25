@@ -99,8 +99,7 @@ Definition eval_if runs store (e_cond e_true e_false : Syntax.expression) : (Sto
   if_eval_return runs store e_cond (fun store v =>
     match (Store.get_value store v) with
     | Some Values.True => eval_cont_terminate runs store e_true
-    | Some Values.False => eval_cont_terminate runs store e_false
-    | Some _ => (store, Fail Values.value_loc "if with neither true or false")
+    | Some _ => eval_cont_terminate runs store e_false
     | None => (store, Fail Values.value_loc "Location of non-existing value.")
     end
   )
