@@ -216,6 +216,15 @@ Set Extraction AccessOpaque.
 
 Extract Constant Operators._nat_of_float => "int_of_float".
 
+Extract Constant Operators._same_value => "(fun v1 v2 -> begin
+  match v1, v2 with
+  | Number x, Number y ->
+    if x = 0. && y = 0.
+    then 1. /. x = 1. /. y
+    else compare x y = 0
+  | _ -> compare v1 v2 = 0
+end)".
+
 Extract Constant Operators._number_eq_bool => "(=)".
 
 Extract Constant Operators._print_string => "fun x -> print_string (CoqUtils.implode x); print_char '\n'".

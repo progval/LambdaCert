@@ -312,7 +312,51 @@ Definition eval_app runs store (f : Syntax.expression) (args_expr : list Syntax.
       apply runs store f_loc args
   ))
 .
-        
+Definition get_property_attribute store (oprop : option Values.attributes) (attr : Syntax.property_attribute_name) : (Store.store * Context.result Values.value_loc) :=
+  match oprop with
+  | None => Context.add_value_return store Values.Undefined
+  | Some prop =>
+    match (attr, prop) with
+    | (Config,     attributes_data_of (attributes_data_intro      _ _ _ config))
+    | (Config, attributes_accessor_of (attributes_accessor_intro _ _ _ config)) =>
+      Context.return_bool store config
+
+    | (Enum,     attributes_data_of (attributes_data_intro     _ _ enum _))
+    | (Enum, attributes_accessor_of (attributes_accessor_intro _ _ enum _)) =>
+      Context.return_bool store enum
+
+    | (Writable, attributes_data_of (attributes_data_intro _ writable _ _)) =>
+      Context.return_bool store writable
+    | (Writable, attributes_accessor_of _) =>
+      (store, Fail Values.value_loc "Access #writable of accessor.")
+
+    | (Value, attributes_data_of (attributes_data_intro value _ _ _)) =>
+      (store, Return value_loc value)
+    | (Value, attributes_accessor_of _) =>
+      (store, Fail Values.value_loc "Access #value of accessor.")
+
+    | (Getter, attributes_accessor_of (attributes_accessor_intro getter _ _ _)) =>
+      (store, Return value_loc getter)
+    | (Getter, attributes_data_of _) =>
+      (store, Fail Values.value_loc "Access #getter of data.")
+
+    | (Setter, attributes_accessor_of (attributes_accessor_intro _ setter _ _)) =>
+      (store, Return value_loc setter)
+    | (Setter, attributes_data_of _) =>
+      (store, Fail Values.value_loc "Access #setter of data.")
+    end
+  end
+.
+
+(* left[right<attr>] *)
+Definition eval_getattr runs store left_expr right_expr attr :=
+  if_eval_return runs store left_expr (fun store left_ =>
+    if_eval_return runs store right_expr (fun store right_ =>
+      assert_get_object store left_ (fun obj =>
+        assert_get_string store right_ (fun fieldname =>
+          get_property_attribute store (get_object_property obj fieldname) attr 
+  ))))
+.
 
 
 Definition set_property_attribute store (oprop : option Values.attributes) (attr : Syntax.property_attribute_name) (new_val : Values.value_loc) : (Store.store * (option Values.attributes) * Context.result Values.value_loc) :=
@@ -403,8 +447,7 @@ Definition eval_setattr runs store left_expr right_expr attr new_val_expr :=
               set_property_attribute store oprop attr new_val
   ))))))
 .
-            
-        
+
 Definition eval_getobjattr runs store obj_expr oattr :=
   if_eval_return runs store obj_expr (fun store obj_loc =>
     assert_get_object store obj_loc (fun obj =>
@@ -559,7 +602,7 @@ Definition eval runs store (e : Syntax.expression) : (Store.store * (@Context.re
   | Syntax.SetBang id expr => eval_setbang runs store id expr
   | Syntax.Lambda args body => eval_lambda runs store args body
   | Syntax.App f args => eval_app runs store f args
-  | Syntax.GetAttr attr left_ right_ => (store, Fail Values.value_loc "GetAttr not implemented.")
+  | Syntax.GetAttr attr left_ right_ => eval_getattr runs store left_ right_ attr
   | Syntax.SetAttr attr left_ right_ newval => eval_setattr runs store left_ right_ attr newval
   | Syntax.GetObjAttr oattr obj => eval_getobjattr runs store obj oattr
   | Syntax.SetObjAttr oattr obj attr => (store, Fail Values.value_loc "SetObjAttr not implemented.")

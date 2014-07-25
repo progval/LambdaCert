@@ -30,6 +30,15 @@ Definition typeof store (v : Values.value) :=
   end
 .
 
+Definition is_primitive store v :=
+  match v with
+  | Undefined | Null | String _ | Number _ | True | False =>
+    Context.add_value_return store True
+  | _ =>
+    Context.add_value_return store False
+  end
+.
+
 Definition void store (v : Values.value) :=
   Context.add_value_return store Undefined
 .
@@ -153,6 +162,7 @@ Definition unary (op : string) runs store v_loc : (Store.store * (@Context.resul
     | "pretty" => pretty runs store v
     | "strlen" => strlen store v
     | "typeof" => typeof store v
+    | "primitive?" => is_primitive store v
     | "abs" => unary_arith store JsNumber.absolute v
     | "void" => void store v
     | "floor" => unary_arith store JsNumber.floor v
@@ -271,6 +281,27 @@ Definition char_at store v1 v2 :=
   end
 .
 
+Definition is_accessor runs store v1_loc v2 :=
+  match v2 with
+  | String s =>
+    let (store, res) := Context.runs_type_get_property runs store (v1_loc, s) in
+    if_return store res (fun ret =>
+      match ret with
+      | Some (attributes_data_of _) => Context.add_value_return store False
+      | Some (attributes_accessor_of _) => Context.add_value_return store True
+      | None => (store, Fail Values.value_loc "isAccessor topped out.")
+      end
+    )
+  | _ => (store, Fail Values.value_loc "isAccessor expected an object and a string.")
+  end
+.
+
+Parameter _same_value : value -> value -> bool.
+
+Definition same_value store v1 v2 :=
+  return_bool store (_same_value v1 v2)
+.
+
 Definition arith store (op : number -> number -> number) (v1 v2 : Values.value) : (Store.store * Context.result Values.value_loc) :=
   match (v1, v2) with
   | (Number n1, Number n2) => Context.add_value_return store (Number (op n1 n2))
@@ -307,10 +338,12 @@ Definition binary (op : string) runs store v1_loc v2_loc : (Store.store * (Conte
       | ">" => cmp store False False True gt_bool v1 v2
       | ">=" => cmp store False True True ge_bool v1 v2
       | "stx=" => stx_eq store v1 v2
+      | "sameValue" => same_value store v1 v2
       | "hasProperty" => has_property runs store v1_loc v2
       | "hasOwnProperty" => has_own_property store v1 v2
       | "string+" => string_plus store v1 v2
       | "char-at" => char_at store v1 v2
+      | "isAccessor" => is_accessor runs store v1_loc v2
       | "__prop->obj" => prop_to_obj store v1 v2 (* For debugging purposes *)
       | _ => (store, Context.Fail Values.value_loc ("Binary operator " ++ op ++ " not implemented."))
       end

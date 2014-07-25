@@ -2589,7 +2589,7 @@ Proof.
     applys* eval_objectdecl_preserves_all_locs_exist.
 
     (* GetAttr *)
-    applys* not_implemented_preserves_all_locs_exist.
+    admit.
 
     (* SetAttr *)
     applys* eval_setattr_preserves_all_locs_exist.
