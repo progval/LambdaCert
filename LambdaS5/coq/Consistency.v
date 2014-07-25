@@ -232,9 +232,10 @@ Definition runs_type_get_closure_preserves_all_locs_exist runs :=
 .
 
 Definition runs_type_get_property_preserves_all_locs_exist runs :=
-  forall st e st2 res,
+  forall st v n st2 res,
   all_locs_exist st ->
-  runs_type_get_property runs st e = (st2, res) ->
+  ok_loc st v ->
+  runs_type_get_property runs st (v, n) = (st2, res) ->
   superstore st st2 /\ all_locs_exist st2 /\
   result_value_loc_exists ok_opt_attributes st2 res
 .
@@ -1707,6 +1708,36 @@ Proof.
       apply superstore_refl.
 Qed.
 
+Lemma monad_ag_preserves_pred :
+  forall X st loc (cont : Values.value -> (store * result X)),
+  forall st2 res2 (P : Store.store -> result X -> Prop),
+  all_locs_exist st ->
+  ok_loc st loc ->
+  (forall f, P st (Fail X f)) ->
+  (forall v st1 res1,
+    (* TODO: ok_ptr st ptr0 -> *)
+    cont v = (st1, res1) ->
+    superstore st st1 /\ P st1 res1) ->
+  @Monads.assert_get X st loc cont = (st2, res2) ->
+  superstore st st2 /\ P st2 res2
+.
+Proof.
+  intros X st loc cont st2 res2 P st_cstt loc_cstt H_fail cont_cstt H.
+  unfold Monads.assert_get in H.
+  destruct (get_value st loc) eqn:v_decl.
+    destruct v eqn:v_def;
+      apply cont_cstt with v;
+      rewrite v_def;
+      apply H.
+
+    inversion H as [(st_eq,res_eq)].
+    rewrite <-st_eq.
+    split.
+      apply superstore_refl.
+
+      apply H_fail.
+Qed.
+
 Lemma monad_agop_preserves_pred :
   forall X st loc (cont : Values.object_ptr -> (store * result X)),
   forall st2 res2 (P : Store.store -> result X -> Prop),
@@ -2513,20 +2544,113 @@ Proof.
       apply H'.
 Qed.
 
+Lemma monad_agofp_preserves_pred :
+  forall X st ptr (cont : Values.object -> (store * result X)),
+  forall st2 res2 (P : Store.store -> result X -> Prop),
+  all_locs_exist st ->
+  (*ok_ptr st ptr ->*)
+  (forall f, P st (Fail X f)) ->
+  (forall obj st1 res1,
+    object_locs_exist st obj ->
+    cont obj = (st1, res1) ->
+    superstore st st1 /\ P st1 res1) ->
+  @Monads.assert_get_object_from_ptr X st ptr cont = (st2, res2) ->
+  superstore st st2 /\ P st2 res2
+.
+Admitted.
+
 Theorem get_property_preserves_all_locs_exist :
   forall runs (st st2 : Store.store) res,
   forall (v : Values.value_loc) (n : Values.prop_name),
   runs_type_get_property_preserves_all_locs_exist runs ->
   all_locs_exist st ->
+  ok_loc st v ->
   Interpreter.get_property runs st (v, n) = (st2, res) ->
   superstore st st2 /\ all_locs_exist st2 /\ result_value_loc_exists ok_opt_attributes st2 res
 .
-Admitted.
+Proof.
+  intros runs st st' res v n runs_get_property_cstt st_cstt v_in_st H.
+  unfold get_property in H.
+  eapply monad_ag_preserves_pred with (P:=fun s r =>
+  all_locs_exist s /\ result_value_loc_exists ok_opt_attributes s r).
+    apply st_cstt.
+
+    Focus 4.
+    apply H.
+
+    apply v_in_st.
+
+    intros f.
+    split.
+      apply st_cstt.
+
+      apply result_value_loc_exists_fail.
+
+  simpl.
+  intros v0 st1' res1 H1.
+  destruct v0 eqn:v0_def; try (
+    inversion H1 as [(st_eq, res1_def)];
+    split; [
+      apply superstore_refl
+      |
+      split; [
+        rewrite <-st_eq;
+        apply st_cstt
+        |
+        apply result_value_loc_exists_return;
+        unfold ok_opt_attributes;
+        trivial]]).
+
+    eapply monad_agofp_preserves_pred with (P:=fun s r =>
+    all_locs_exist s /\ result_value_loc_exists ok_opt_attributes s r).
+      Focus 4.
+      eapply H1.
+
+      apply st_cstt.
+
+      intros f.
+      split.
+        apply st_cstt.
+
+        apply result_value_loc_exists_fail.
+
+    simpl.
+    intros obj st2' res2 obj_cstt H2.
+    destruct (get_object_property obj n) as [attr|_] eqn:attr_def.
+      inversion H2 as [(st_eq,res2_def)].
+      rewrite <-st_eq.
+      split.
+        apply superstore_refl.
+
+        split.
+          apply st_cstt.
+
+          apply result_value_loc_exists_return.
+          apply get_object_property_preserves_all_locs_exist with obj n.
+            apply st_cstt.
+
+            apply attr_def.
+
+      unfold runs_type_get_property_preserves_all_locs_exist in runs_get_property_cstt.
+      apply runs_get_property_cstt with (object_proto obj) n.
+        apply st_cstt.
+
+        unfold object_locs_exist in obj_cstt.
+        destruct obj as (prot, class, ext, primval, props, code) eqn:obj_def.
+        destruct obj_cstt with prot class ext primval props code.
+          reflexivity.
+        simpl.
+        assumption.
+
+      apply H2.
+Qed.
+
 
 Theorem runs_get_property_preserves_all_locs_exist :
   forall max_steps (st : Store.store),
   forall (v : Values.value_loc) (n : Values.prop_name) st2 res,
   all_locs_exist st ->
+  ok_loc st v ->
   Interpreter.runs_get_property max_steps st (v, n) = (st2, res) ->
   superstore st st2 /\ all_locs_exist st2 /\
   result_value_loc_exists ok_opt_attributes st2 res
@@ -2534,7 +2658,7 @@ Theorem runs_get_property_preserves_all_locs_exist :
 Proof.
   intros max_steps.
   induction max_steps. (* TODO: no automatic naming *)
-    intros st v n st2 res st_cstt H.
+    intros st v n st2 res st_cstt v_in_st H.
     unfold runs in H.
     inversion H as [(st_eq, res_def)].
       split.
@@ -2546,20 +2670,22 @@ Proof.
 
           apply result_value_loc_exists_fail.
 
-    intros st e st2 res st_cstt H.
+    intros st v n st2 res st_cstt v_in_st H.
     unfold runs_get_property in H.
     unfold runs in H.
     eapply get_property_preserves_all_locs_exist.
+      Focus 4.
+      apply H.
 
       Focus 2.
-      apply H.
+      apply st_cstt.
+
+      Focus 2.
+      apply v_in_st.
 
       unfold runs_type_get_property_preserves_all_locs_exist.
       simpl.
-      intros st0 v_n st1 res1 st0_cstt H'.
-      destruct v_n as (v,n).
-      apply IHmax_steps with v n.
-        apply st0_cstt.
-
-        apply H'.
+      intros st0 v' n' st1 res1 st0_cstt.
+      apply IHmax_steps.
+      apply st0_cstt.
 Qed.
