@@ -4,11 +4,14 @@ import os
 import sys
 import glob
 import tempfile
+import threading
 import itertools
 import subprocess
 from io import BytesIO
+import multiprocessing.dummy
 
 TIMEOUT = 240
+NB_THREADS = 5
 
 if sys.version_info < (3, 3, 0):
     print('Python >= 3.3 is needed (subprocess timeout support).')
@@ -49,6 +52,7 @@ if LJS_BIN:
     tests = itertools.chain(tests,
         map(lambda x:(ES5_ENV, LJS_BIN, x), ljs_tests ))
 
+output_lock = threading.Lock()
 
 successes = []
 fails = []
@@ -59,12 +63,10 @@ def run_test(env, ljs_bin, test):
     in_ = test + '.in.ljs'
     out = test + '.out.ljs'
     skip = test + '.skip'
-    sys.stdout.write('%s... ' % test)
-    sys.stdout.flush()
     if os.path.isfile(skip):
         with open(skip) as fd:
             skipped.append((test, fd.read()))
-        print('skipped.')
+        print('%s: skipped.' % test)
         return
     if env:
         command = [EXE, '-load', env]
@@ -73,57 +75,82 @@ def run_test(env, ljs_bin, test):
     if ljs_bin:
         if 'eval' in test.rsplit('/', 1)[-1].split('.', 1)[0].split('-'):
             skipped.append((test, 'Requires eval'))
-            print('skipped')
+            with output_lock:
+                print('%s: skipped.' % test)
             return
         with tempfile.TemporaryFile() as desugared:
-            subprocess.call([ljs_bin, '-desugar', test, '-print-src'], stdout=desugared)
+            subprocess.call([ljs_bin, '-desugar', test, '-print-src'],
+                    stdout=desugared)
             desugared.seek(0)
-            output = subprocess.check_output(command + ['stdin'], stdin=desugared, timeout=TIMEOUT)
+            output = subprocess.check_output(command + ['stdin'],
+                    stdin=desugared, stderr=subprocess.DEVNULL, timeout=TIMEOUT)
         output = output.decode()
         if 'passed' in output or 'Passed' in output:
             successes.append(test)
-            print('ok.')
+            with output_lock:
+                print('%s: ok.' % test)
         else:
-            print(output)
+            with output_lock:
+                sys.stdout.write('%s: %s' % (test, output))
+                sys.stdout.flush()
             fails.append(test)
         del desugared
     else:
         with open(in_) as in_fd:
             try:
                 output = subprocess.check_output(command + ['stdin'],
-                        stdin=in_fd, timeout=TIMEOUT)
+                    stdin=in_fd, stderr=subprocess.DEVNULL, timeout=TIMEOUT)
             except subprocess.CalledProcessError:
                 fails.append(test)
                 return
         with tempfile.TemporaryFile() as out_fd:
             out_fd.write(output)
             out_fd.seek(0)
-            if subprocess.call(['diff', '-', out], stdin=out_fd):
-                fails.append(test)
-            else:
-                successes.append(test)
-                print('ok.')
+            with output_lock:
+                sys.stdout.write('%s: ' % test)
+                sys.stdout.flush()
+                if subprocess.call(['diff', '-', out], stdin=out_fd):
+                    fails.append(test)
+                else:
+                    successes.append(test)
+                    print('ok.')
+
+
+stop = False
+def test_wrapper(args):
+    (env, ljs_bin, test) = args
+    global stop
+    try:
+        if stop:
+            return
+        run_test(*args)
+    except subprocess.TimeoutExpired:
+        with output_lock:
+            print('timeout')
+        timeout.append(test)
+    except Exception as e:
+        stop = True
+        raise
 
 try:
+    pool = multiprocessing.dummy.Pool(NB_THREADS)
+    pool.map(test_wrapper, tests)
     for (env, ljs_bin, test) in tests:
-        try:
-            run_test(env, ljs_bin, test)
-        except subprocess.TimeoutExpired:
-            print('timeout')
-            timeout.append(test)
+        threading.Thread(target=test_wrapper, args=(env, ljs_bin, test)).start()
 finally:
-    print('')
-    print('Result:')
-    print('\t%d successed' % len(successes))
-    print('\t%d skipped:' % len(skipped))
-    for (test, msg) in skipped:
-        print('\t\t%s: %s' % (test, msg))
-    print('\t%d timed out:' % len(timeout))
-    for test in timeout:
-        print('\t\t%s' % test)
-    print('\t%d failed:' % len(fails))
-    for fail in fails:
-        print('\t\t%s' % fail)
+    with output_lock:
+        print('')
+        print('Result:')
+        print('\t%d successed' % len(successes))
+        print('\t%d skipped:' % len(skipped))
+        for (test, msg) in skipped:
+            print('\t\t%s: %s' % (test, msg))
+        print('\t%d timed out:' % len(timeout))
+        for test in timeout:
+            print('\t\t%s' % test)
+        print('\t%d failed:' % len(fails))
+        for fail in fails:
+            print('\t\t%s' % fail)
 if fails:
    exit(1)
 else:
