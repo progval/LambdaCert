@@ -29,6 +29,10 @@ Definition typeof store (v : Values.value) :=
   end
 .
 
+Definition void store (v : Values.value) :=
+  Context.add_value_return store Undefined
+.
+
 Definition prim_to_str store (v : Values.value) :=
   match v with
   | Undefined => Context.add_value_return store (String "undefined")
@@ -38,6 +42,19 @@ Definition prim_to_str store (v : Values.value) :=
   | True => Context.add_value_return store (String "true")
   | False => Context.add_value_return store (String "false")
   | _ => (store, Fail Values.value_loc "prim_to_str not implemented for this type.")
+  end
+.
+
+Definition prim_to_num store (v : Values.value) :=
+  match v with
+  | Undefined => Context.add_value_return store (Number JsNumber.nan)
+  | Null => Context.add_value_return store (Number JsNumber.zero)
+  | True => Context.add_value_return store (Number JsNumber.one)
+  | False => Context.add_value_return store (Number JsNumber.zero)
+  | Number n => Context.add_value_return store (Number n)
+  | String "" => Context.add_value_return store (Number JsNumber.zero)
+  | String s => Context.add_value_return store (Number (JsNumber.from_string s))
+  | _ => (store, Fail value_loc "prim_to_num got invalid value.")
   end
 .
 
@@ -87,6 +104,7 @@ Definition nnot store (v : Values.value) :=
 .
 
 Parameter _print_string : string -> unit.
+Parameter _pretty : nat -> store -> value -> unit.
 Definition _seq {X Y : Type} (x : X) (y : Y) : Y :=
   y
 .
@@ -99,14 +117,41 @@ Definition print store (v : Values.value) :=
   end
 .
 
+Definition pretty runs store v :=
+  _seq
+  (_pretty (Context.runs_type_nat_fuel runs) store v)
+  (Context.add_value_return store Undefined)
+.
+
+Definition numstr_to_num store (v : Values.value) :=
+  match v with
+  | String "" => Context.add_value_return store (Number JsNumber.zero)
+  | String s => Context.add_value_return store (Number (JsNumber.from_string s))
+  | _ => (store, Fail value_loc "numstr_to_num got invalid value.")
+  end
+.
+
+Definition unary_arith store (op : number -> number) (v : Values.value) : (Store.store * Context.result Values.value_loc) :=
+  match v with
+  | Number n => Context.add_value_return store (Number (op n))
+  | _ => (store, Fail Values.value_loc "Arithmetic with non-number.")
+  end
+.
+
 Definition unary (op : string) runs store v_loc : (Store.store * (@Context.result Values.value_loc)) :=
   assert_deref store v_loc (fun v =>
     match op with
     | "print" => print store v
+    | "pretty" => pretty runs store v
     | "typeof" => typeof store v
+    | "abs" => unary_arith store JsNumber.absolute v
+    | "void" => void store v
+    | "floor" => unary_arith store JsNumber.floor v
     | "prim->str" => prim_to_str store v
+    | "prim->num" => prim_to_num store v
     | "prim->bool" => prim_to_bool store v
     | "!" => nnot store v
+    | "numstr->num" => numstr_to_num store v
     | _ => (store, Context.Fail Values.value_loc ("Unary operator " ++ op ++ " not implemented."))
     end
   )
@@ -211,11 +256,31 @@ Definition arith store (op : number -> number -> number) (v1 v2 : Values.value) 
   end
 .
 
+Definition cmp store (op : number -> number -> bool) (v1 v2 : Values.value) : (Store.store * Context.result Values.value_loc) :=
+  match (v1, v2) with
+  | (Number n1, Number n2) => Context.add_value_return store (if (op n1 n2) then True else False)
+  | _ => (store, Fail Values.value_loc "Comparison of non-numbers.")
+  end
+.
+
+Parameter le_bool : number -> number -> bool.
+Parameter gt_bool : number -> number -> bool.
+Parameter ge_bool : number -> number -> bool.
+
+
 Definition binary (op : string) runs store v1_loc v2_loc : (Store.store * (Context.result Values.value_loc)) :=
   assert_deref store v1_loc (fun v1 =>
     assert_deref store v2_loc (fun v2 =>
       match op with
       | "+" => arith store JsNumber.add v1 v2
+      | "-" => arith store JsNumber.sub v1 v2
+      | "*" => arith store JsNumber.mult v1 v2
+      | "/" => arith store JsNumber.div v1 v2
+      | "%" => arith store JsNumber.fmod v1 v2
+      | "<" => cmp store JsNumber.lt_bool v1 v2
+      | "<=" => cmp store le_bool v1 v2
+      | ">" => cmp store gt_bool v1 v2
+      | ">=" => cmp store ge_bool v1 v2
       | "stx=" => stx_eq store v1 v2
       | "hasProperty" => has_property runs store v1_loc v2
       | "hasOwnProperty" => has_own_property store v1 v2

@@ -48,7 +48,7 @@ On an up-to-date system, your default package manager and OPAM (the
 OCaml package manager) should be ok:
 
 ```
-sudo aptitude install autotools git subversion ocaml ocaml-native-compilers ocaml-findlib camlp4-extra opam coq coq-theories libcoq-ocaml m4 autoconf
+sudo aptitude install autotools git subversion ocaml ocaml-native-compilers ocaml-findlib camlp4-extra opam coq coq-theories libcoq-ocaml m4 autoconf python3
 OPAMYES=1 opam init
 OPAMYES=1 opam install xml-light bisect ocamlgraph
 eval `opam config env`
@@ -77,21 +77,15 @@ We will use a patched version of LambdaS5 (you can see my patches
 [here](https://github.com/brownplt/LambdaS5/pulls/ProgVal) and
 [here](https://github.com/brownplt/LambdaS5/pulls/ProgVal?state=closed))
 
-First, get the source code (about 66MB):
+First, get the source code (about 66MB) and compile it:
 
 ```
 cd ~/js/
 git clone https://github.com/ProgVal/LambdaS5.git
 cd LambdaS5/
 git checkout working
-```
-
-Then, you can compile LambdaS5:
-
-```
-cd ..
+cd src/
 make
-cd ..
 ```
 
 You now have to make LambdaS5 aware of a path where it can find SpiderMonkey.
@@ -199,4 +193,12 @@ make snapshot
 ./build/eval.native -load tests/es5.dump /tmp/hello.ljs
 ./build/eval.native -load tests/es5.dump /tmp/hello.ljs
 ./build/eval.native -load tests/es5.dump /tmp/hello.ljs
+```
+
+Finally, you can run LambdaCert’s tests:
+
+```
+make quicktests # For language tests
+make tests # For language + env tests
+./tests/run_tests.py tests/es5.dump ~/js/LambdaS5/obj/s5.d.byte ~/js/LambdaS5/tests/unit-tests/
 ```
