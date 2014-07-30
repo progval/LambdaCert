@@ -1,0 +1,5 @@
+let (b = {[] 'foo': {#value 'FOO', #writable true}}) {
+let (f = func(a) { b['foo' = 'bar'] })
+f(5);
+b['foo']
+}

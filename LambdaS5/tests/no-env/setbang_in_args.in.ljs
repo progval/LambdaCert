@@ -1,0 +1,6 @@
+let (f = func(a) { a })
+let (b = 5) {
+f(b:=10);
+b
+}
+
