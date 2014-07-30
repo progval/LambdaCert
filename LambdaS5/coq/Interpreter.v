@@ -100,7 +100,7 @@ Definition eval_if runs store (e_cond e_true e_false : Syntax.expression) : (Sto
     match (Store.get_value store v) with
     | Some Values.True => eval_cont_terminate runs store e_true
     | Some _ => eval_cont_terminate runs store e_false
-    | None => (store, Fail Values.value_loc "Location of non-existing value.")
+    | None => (store, Impossible Values.value_loc "Location of non-existing value.")
     end
   )
 .
@@ -534,6 +534,7 @@ Definition eval_label runs store (label : string) body : (Store.store * (@Contex
       else
         (store, Break Values.value_loc b v)
     | Fail f => (store, Fail Values.value_loc f)
+    | Impossible f => (store, Impossible Values.value_loc f)
     end
   )
 .
@@ -560,6 +561,7 @@ Definition eval_trycatch runs store body catch : (Store.store * (@Context.result
       )
     | Break b v => (store, Break Values.value_loc b v)
     | Fail f => (store, Fail Values.value_loc f)
+    | Impossible f => (store, Impossible Values.value_loc f)
     end
   )
 .
@@ -574,6 +576,7 @@ Definition eval_tryfinally runs store body fin : (Store.store * (@Context.result
       )
     | Break b v => (store, Break Values.value_loc b v)
     | Fail f => (store, Fail Values.value_loc f)
+    | Impossible f => (store, Impossible Values.value_loc f)
     end
   )
 .

@@ -15,6 +15,7 @@ Inductive result (value_type : Type) : Type :=
   | Exception : Values.value_loc -> result value_type (* exception message *)
   | Break : string -> Values.value_loc -> result value_type (* label, expression *)
   | Fail : string -> result value_type (* reason *)
+  | Impossible : string -> result value_type
 .
 
 Definition runner_type (runner_arg : Type) (runner_ret : Type) :=
@@ -43,7 +44,7 @@ Definition update_object {return_type : Type} store (ptr : Values.object_ptr) (p
       match (pred obj) with (store, new_obj, ret) =>
         (Store.update_object store ptr new_obj, ret)
       end
-  | None => (store, Fail return_type "Pointer to a non-existing object.")
+  | None => (store, Impossible return_type "Pointer to a non-existing object.")
   end
 .
 

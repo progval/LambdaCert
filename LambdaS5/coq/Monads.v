@@ -34,6 +34,7 @@ Definition if_return {value_type : Type} {return_type : Type} store (var : Conte
   | Exception exc => (store, Exception return_type exc)
   | Break b v => (store, Break return_type b v)
   | Fail f => (store, Fail return_type f)
+  | Impossible f => (store, Impossible return_type f)
   end
 .
 
@@ -70,7 +71,7 @@ Definition if_some_eval_return_else_none {value_type : Type} runs store (oe : op
 Definition assert_deref {value_type : Type} store (loc : Values.value_loc) (cont : Values.value -> (Store.store * (Context.result value_type))) : (Store.store * (Context.result value_type)) :=
   match (Store.get_value store loc) with
   | Some val => cont val
-  | None => (store, Fail value_type "Location of non-existing value.")
+  | None => (store, Impossible value_type "Location of non-existing value.")
   end
 .
 
@@ -79,7 +80,7 @@ Definition assert_deref {value_type : Type} store (loc : Values.value_loc) (cont
 Definition assert_get {value_type : Type} store (loc : Values.value_loc) (cont : Values.value -> (Store.store * (Context.result value_type))) : (Store.store * (Context.result value_type)) :=
   match (Store.get_value store loc) with
   | Some val => cont val
-  | None => (store, Fail value_type "Location of non-existing value.")
+  | None => (store, Impossible value_type "Location of non-existing value.")
   end
 .
 
@@ -89,14 +90,14 @@ Definition assert_get_object_ptr {value_type : Type} store (loc : Values.value_l
   match (Store.get_value store loc) with
   | Some (Values.Object ptr) => cont ptr
   | Some _ => (store, Fail value_type "Expected an object pointer.")
-  | None => (store, Fail value_type "Location of non-existing value.")
+  | None => (store, Impossible value_type "Location of non-existing value.")
   end
 .
 
 Definition assert_get_object_from_ptr {value_type : Type} store (ptr : Values.object_ptr) (cont : Values.object -> (Store.store * (Context.result value_type))) : (Store.store * (Context.result value_type)) :=
   match (Store.get_object store ptr) with
   | Some obj => cont obj
-  | None => (store, Fail value_type "Pointer to a non-existing object.")
+  | None => (store, Impossible value_type "Pointer to a non-existing object.")
   end
 .
 
@@ -113,7 +114,7 @@ Definition assert_get_string {value_type : Type} store (loc : Values.value_loc) 
   match (Store.get_value store loc) with
   | Some (Values.String s) => cont s
   | Some _ => (store, Fail value_type "Expected String but did not get one.")
-  | None => (store, Fail value_type "Location of non-existing value.")
+  | None => (store, Impossible value_type "Location of non-existing value.")
   end
 .
 

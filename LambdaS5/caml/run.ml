@@ -36,6 +36,7 @@ let print_result (store, result) =
   | Context.Exception e -> print_string "Uncaught exception: "; print_string (PrettyPrint.string_of_value_loc 5 store e)
   | Context.Break (l, v) -> Printf.printf "Uncaught break %s: %s" (CoqUtils.implode l) (PrettyPrint.string_of_value_loc 5 store v)
   | Context.Fail f -> print_string "Fail: "; print_string (CoqUtils.implode f)
+  | Context.Impossible f -> print_string "The impossible happened: "; print_string (CoqUtils.implode f)
   );
   print_string "\n"
 

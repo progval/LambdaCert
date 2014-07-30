@@ -172,6 +172,8 @@ Inductive result_value_loc_exists {value_type : Type} (ok : Store.store -> value
       result_value_loc_exists ok st (Break value_type b l)
   | result_value_loc_exists_fail : forall (s : string),
       result_value_loc_exists ok st (Fail value_type s)
+  | result_value_loc_exists_impossible : forall (s : string),
+      result_value_loc_exists ok st (Impossible value_type s)
 .
 
 Lemma result_value_loc_exists_change_ok_exception :
@@ -207,6 +209,16 @@ Lemma result_value_loc_exists_change_ok_fail :
 Proof.
   intros X Y st v ok1 ok2 H.
   apply result_value_loc_exists_fail.
+Qed.
+
+Lemma result_value_loc_exists_change_ok_impossible :
+  forall X Y st v ok1 ok2,
+  result_value_loc_exists ok1 st (@Impossible X v) ->
+  result_value_loc_exists ok2 st (@Impossible Y v)
+.
+Proof.
+  intros X Y st v ok1 ok2 H.
+  apply result_value_loc_exists_impossible.
 Qed.
 
 
@@ -325,11 +337,12 @@ Lemma superstore_result_value_loc_exists :
 .
 Proof.
   intros st st2 res superstore_st_st2.
-  destruct res as [v|exc|b|f]; intro H; (* TODO: no auto-naming for break value. *)
+  destruct res as [v|exc|b|f|f]; intro H; (* TODO: no auto-naming for break value. *)
       try apply result_value_loc_exists_return;
       try apply result_value_loc_exists_exception;
       try apply result_value_loc_exists_break;
       try apply result_value_loc_exists_fail;
+      try apply result_value_loc_exists_impossible;
       apply superstore_st_st2;
       inversion H;
       assumption.
@@ -745,6 +758,10 @@ Proof.
       (* Fail *)
       destruct (add_value st v) in H.
       inversion H.
+
+      (* Impossible *)
+      destruct (add_value st v) in H.
+      inversion H.
 Qed.
 
 Lemma obj_write_makes_superstore :
@@ -994,7 +1011,7 @@ Proof.
       rewrite <-st_eq.
       apply st_cstt.
 
-      apply result_value_loc_exists_fail.
+      apply result_value_loc_exists_impossible.
 Qed.
 
 Lemma get_object_property_preserves_all_locs_exist :
@@ -1366,6 +1383,7 @@ Lemma monad_ir_preserves_props_loc :
   (forall v, res = Exception Values.value_loc v -> P st res) ->
   (forall b v, res = Break Values.value_loc b v -> P st res) ->
   (forall f, res = Fail Values.value_loc f -> P st res) ->
+  (forall f, res = Impossible Values.value_loc f -> P st res) ->
   (forall loc st1 res,
     ok_loc st loc ->
     cont loc = (st1, res) ->
@@ -1374,7 +1392,7 @@ Lemma monad_ir_preserves_props_loc :
   superstore st st2 /\ P st2 res2
 .
 Proof.
-  intros st st2 res cont res2 P IH H_res H_exc H_brk H_fail H st2_decl.
+  intros st st2 res cont res2 P IH H_res H_exc H_brk H_fail H_imp H st2_decl.
   unfold Monads.if_return in st2_decl.
   destruct res eqn:res_def; inversion st2_decl as [(st2_def, res2_def)].
     apply H with v.
@@ -1403,6 +1421,13 @@ Proof.
 
       apply (H_fail s).
       reflexivity.
+
+    rewrite <-st2_def.
+    split.
+      apply superstore_refl.
+
+      apply (H_imp s).
+      reflexivity.
 Qed.
 
 
@@ -1413,6 +1438,7 @@ Lemma monad_ir_preserves_pred :
   (forall v, res = Exception Values.value_loc v -> P st (Exception Y v)) ->
   (forall b v, res = Break Values.value_loc b v -> P st (Break Y b v)) ->
   (forall f, res = Fail Values.value_loc f -> P st (Fail Y f)) ->
+  (forall f, res = Impossible Values.value_loc f -> P st (Impossible Y f)) ->
   (forall loc st1 res,
     ok_loc st loc ->
     cont loc = (st1, res) ->
@@ -1421,7 +1447,7 @@ Lemma monad_ir_preserves_pred :
   superstore st st2 /\ P st2 res2
 .
 Proof.
-  intros Y st st2 res cont res2 P st_cstt res_cstt H_exc H_brk H_fail H st2_decl.
+  intros Y st st2 res cont res2 P st_cstt res_cstt H_exc H_brk H_fail H_imp H st2_decl.
   unfold Monads.if_return in st2_decl.
   destruct res eqn:res_def; inversion st2_decl as [(st2_def, res2_def)].
     apply H with v.
@@ -1450,6 +1476,13 @@ Proof.
 
       apply (H_fail s).
       reflexivity.
+
+    rewrite <-st2_def.
+    split.
+      apply superstore_refl.
+
+      apply (H_imp s).
+      reflexivity.
 Qed.
 
 Lemma monad_ir_preserves_props :
@@ -1465,7 +1498,8 @@ Lemma monad_ir_preserves_props :
   (forall v, res = Return Values.object_properties v -> P st2 res2) /\
   (forall v, res = Exception Values.object_properties v -> res2 = Exception Y v) /\
   (forall b v, res = Break Values.object_properties b v -> res2 = Break Y b v) /\
-  (forall f, res = Fail Values.object_properties f -> res2 = Fail Y f)
+  (forall f, res = Fail Values.object_properties f -> res2 = Fail Y f) /\
+  (forall f, res = Impossible Values.object_properties f -> res2 = Impossible Y f)
 .
 Proof.
   intros Y st st2 res cont res2 P IH res_cstt cont_cstt H.
@@ -1473,10 +1507,11 @@ Proof.
     (forall v : object_properties, res = Return object_properties v -> P st2 res2) /\
     (forall v : value_loc, res = Exception object_properties v -> res2 = Exception Y v) /\
     (forall (b : string) (v : value_loc), res = Break object_properties b v -> res2 = Break Y b v) /\
-    (forall f : string, res = Fail object_properties f -> res2 = Fail Y f)
+    (forall f : string, res = Fail object_properties f -> res2 = Fail Y f) /\
+    (forall f : string, res = Impossible object_properties f -> res2 = Impossible Y f)
   ).
   unfold Monads.if_return in H.
-  destruct res as [props|exc|brk|f] eqn:res_def; inversion H as [(st2_def, res2_def)].
+  destruct res as [props|exc|brk|f|f] eqn:res_def; inversion H as [(st2_def, res2_def)].
     (* Return *)
     inversion res_cstt.
     split.
@@ -1498,8 +1533,9 @@ Proof.
             intros b v' H_absurd.
             inversion H_absurd.
 
-            intros f H_absurd.
-            inversion H_absurd.
+            split;
+              intros f H_absurd;
+              inversion H_absurd.
 
     (* Exception *)
     split.
@@ -1518,8 +1554,9 @@ Proof.
             intros b v' H_absurd.
             inversion H_absurd.
 
-            intros f H_absurd.
-            inversion H_absurd.
+            split;
+              intros f H_absurd;
+              inversion H_absurd.
 
     (* Break *)
     split.
@@ -1540,8 +1577,9 @@ Proof.
             rewrite <-v_eq.
             reflexivity.
 
-            intros f H_absurd.
-            inversion H_absurd.
+            split;
+              intros f H_absurd;
+              inversion H_absurd.
 
     (* Fail *)
     split.
@@ -1559,10 +1597,33 @@ Proof.
             intros b v' H_absurd.
             inversion H_absurd.
 
-            intros f' H_eq.
-            inversion H_eq as [f_eq].
-            rewrite <-f_eq.
-            reflexivity.
+            split;
+              intros f' H_eq;
+              inversion H_eq as [f_eq];
+              rewrite <-f_eq;
+              reflexivity.
+
+    (* Impossible *)
+    split.
+      apply superstore_refl.
+
+      split.
+        intros v' H_absurd.
+        inversion H_absurd.
+
+        split.
+          intros v' H_absurd.
+          inversion H_absurd.
+
+          split.
+            intros b v' H_absurd.
+            inversion H_absurd.
+
+            split;
+              intros f' H_eq;
+              inversion H_eq as [f_eq];
+              rewrite <-f_eq;
+              reflexivity.
 Qed.
 
 Lemma monad_ier_preserves_pred :
@@ -1573,6 +1634,7 @@ Lemma monad_ier_preserves_pred :
   (forall Y st' v, P Y st' (Exception Y v) -> P X st' (Exception X v)) ->
   (forall Y st' b v, P Y st' (Break Y b v) -> P X st' (Break X b v)) ->
   (forall Y st' f, P Y st' (Fail Y f) -> P X st' (Fail X f)) ->
+  (forall Y st' f, P Y st' (Impossible Y f) -> P X st' (Impossible X f)) ->
   (forall st0 loc0 st1 res,
     superstore st st0 ->
     all_locs_exist st0 /\ ok_loc st0 loc0 ->
@@ -1583,7 +1645,7 @@ Lemma monad_ier_preserves_pred :
 .
 Proof.
   intros X runs st st2 e cont res P.
-  intros runs_cstt IH H_P H_exc H_brk H_fail H H_res.
+  intros runs_cstt IH H_P H_exc H_brk H_fail H_imp H H_res.
   unfold Monads.if_eval_return in H_res.
   apply monad_ec_preserves_pred with runs e
           (fun (store : store) (res0 : result value_loc) =>
@@ -1613,6 +1675,12 @@ Proof.
 
       intros f res0_def.
       apply H_fail with Values.value_loc.
+      rewrite <-res0_def.
+      apply H_P.
+      apply IH1.
+
+      intros f res0_def.
+      apply H_imp with Values.value_loc.
       rewrite <-res0_def.
       apply H_P.
       apply IH1.
@@ -1674,6 +1742,14 @@ Proof.
         apply IH1.
 
       intros b v res0_def.
+      split.
+        apply IH1.
+
+        apply H_P.
+        rewrite <-res0_def.
+        apply IH1.
+
+      intros f res0_def.
       split.
         apply IH1.
 
@@ -1765,6 +1841,15 @@ Proof.
       rewrite <-res0_def.
       apply res0_cstt.
 
+    intros f res0_def.
+    apply H_P.
+    split.
+      try apply st0_cstt.
+
+      apply result_value_loc_exists_change_ok_impossible with Values.value_loc ok_loc.
+      rewrite <-res0_def.
+      apply res0_cstt.
+
 
     intros loc st3 res3 IH'' st3_decl.
     apply cont_cstt with loc;
@@ -1852,7 +1937,7 @@ Lemma monad_ag_preserves_pred :
   forall st2 res2 (P : Store.store -> result X -> Prop),
   all_locs_exist st ->
   ok_loc st loc ->
-  (forall f, P st (Fail X f)) ->
+  (forall f, P st (Impossible X f)) ->
   (forall v st1 res1,
     (* TODO: ok_ptr st ptr0 -> *)
     cont v = (st1, res1) ->
@@ -1861,7 +1946,7 @@ Lemma monad_ag_preserves_pred :
   superstore st st2 /\ P st2 res2
 .
 Proof.
-  intros X st loc cont st2 res2 P st_cstt loc_cstt H_fail cont_cstt H.
+  intros X st loc cont st2 res2 P st_cstt loc_cstt H_imp cont_cstt H.
   unfold Monads.assert_get in H.
   destruct (get_value st loc) eqn:v_decl.
     destruct v eqn:v_def;
@@ -1874,7 +1959,7 @@ Proof.
     split.
       apply superstore_refl.
 
-      apply H_fail.
+      apply H_imp.
 Qed.
 
 Lemma monad_agop_preserves_pred :
@@ -1883,6 +1968,7 @@ Lemma monad_agop_preserves_pred :
   all_locs_exist st ->
   ok_loc st loc ->
   (forall f, P st (Fail X f)) ->
+  (forall f, P st (Impossible X f)) ->
   (forall ptr st1 res1,
     (* TODO: ok_ptr st ptr0 -> *)
     cont ptr = (st1, res1) ->
@@ -1891,7 +1977,7 @@ Lemma monad_agop_preserves_pred :
   superstore st st2 /\ P st2 res2
 .
 Proof.
-  intros X st loc cont st2 res2 P st_cstt loc_cstt H_fail cont_cstt H.
+  intros X st loc cont st2 res2 P st_cstt loc_cstt H_fail H_imp cont_cstt H.
   unfold Monads.assert_get_object_ptr in H.
   destruct (get_value st loc) eqn:v_decl.
     destruct v eqn:v_def; try solve [
@@ -1908,7 +1994,7 @@ Proof.
     split.
       apply superstore_refl.
 
-      apply H_fail.
+      apply H_imp.
 Qed.
 
 Lemma monad_ags_preserves_pred :
@@ -1916,6 +2002,7 @@ Lemma monad_ags_preserves_pred :
   all_locs_exist st ->
   ok_loc st loc ->
   (forall f, P st (Fail X f)) ->
+  (forall f, P st (Impossible X f)) ->
   (forall ptr st1 res1,
     (* TODO: ok_ptr st ptr0 -> *)
     cont ptr = (st1, res1) ->
@@ -1924,7 +2011,7 @@ Lemma monad_ags_preserves_pred :
   superstore st st2 /\ P st2 res2
 .
 Proof.
-  intros X st loc cont st2 res2 P st_cstt loc_cstt H_fail cont_cstt H.
+  intros X st loc cont st2 res2 P st_cstt loc_cstt H_fail H_imp cont_cstt H.
   unfold Monads.assert_get_string in H.
   destruct (get_value st loc) eqn:v_decl.
     destruct v eqn:v_def; try solve [
@@ -1941,7 +2028,7 @@ Proof.
     split.
       apply superstore_refl.
 
-      apply H_fail.
+      apply H_imp.
 Qed.
 
 (******** Consistency of evaluators ********)
@@ -2278,7 +2365,9 @@ Proof.
   (forall (b : string) (v : value_loc),
    props_locs_res = Break object_properties b v -> res4 = Break value_loc b v) /\
   (forall f : string,
-   props_locs_res = Fail object_properties f -> res4 = Fail value_loc f)).
+   props_locs_res = Fail object_properties f -> res4 = Fail value_loc f) /\
+  (forall f : string,
+   props_locs_res = Impossible object_properties f -> res4 = Impossible value_loc f)).
     eapply (monad_ir_preserves_props Values.value_loc
            st5 st4' props_locs_res)
           with (res2:=res4) (P:=res_pred).
@@ -2297,7 +2386,7 @@ Proof.
           apply H.
 
     destruct H as [superstore_st5_st4' [H_ret [H_exc [H_brk H_fail]]]].
-    destruct props_locs_res as [v'|foo|b|bar] eqn:props_locs_res_decl.
+    destruct props_locs_res as [v'|foo|b|bar|baz] eqn:props_locs_res_decl.
       apply H_ret with v'.
       reflexivity.
 
@@ -2329,6 +2418,15 @@ Proof.
         apply st5_cstt.
 
         apply result_value_loc_exists_fail.
+
+      unfold res_pred.
+      unfold Monads.if_return in st4'_decl.
+      inversion st4'_decl as [(st4'_def,res4_def)].
+      rewrite <-st4'_def.
+      split.
+        apply st5_cstt.
+
+        apply result_value_loc_exists_impossible.
 
   (* Unfold object allocation. *)
   simpl.
@@ -2504,6 +2602,13 @@ Proof.
 
       apply result_value_loc_exists_fail.
 
+    unfold res_pred.
+    intro f.
+    split.
+      apply st4_cstt.
+
+      apply result_value_loc_exists_impossible.
+
     Focus 2.
     apply H.
 
@@ -2525,6 +2630,13 @@ Proof.
       apply st4_cstt.
 
       apply result_value_loc_exists_fail.
+
+    unfold res_pred.
+    intro f.
+    split.
+      apply st4_cstt.
+
+      apply result_value_loc_exists_impossible.
 
   intros fieldname st6 res6 H.
 
@@ -2723,7 +2835,7 @@ Proof.
     split.
       apply st_cstt.
 
-      apply result_value_loc_exists_fail.
+      apply result_value_loc_exists_impossible.
 
   simpl.
   intros v0 st1' res1 H1.
